@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { 
   Plus, 
   Calendar, 
@@ -27,6 +27,7 @@ import {
 const mockTasks = [
   {
     id: 1,
+    code: 'TSK-001',
     title: 'Criar apresentação do projeto',
     description: 'Desenvolver apresentação completa para o cliente TechCorp',
     project: 'Evento Corporativo Q1',
@@ -44,6 +45,7 @@ const mockTasks = [
   },
   {
     id: 2,
+    code: 'TSK-002',
     title: 'Revisar cronograma de atividades',
     description: 'Atualizar cronograma baseado nas mudanças do cliente',
     project: 'Lançamento Produto',
@@ -61,6 +63,7 @@ const mockTasks = [
   },
   {
     id: 3,
+    code: 'TSK-003',
     title: 'Preparar material de treinamento',
     description: 'Criar conteúdo e materiais para workshop digital',
     project: 'Workshop Digital',
@@ -78,6 +81,7 @@ const mockTasks = [
   },
   {
     id: 4,
+    code: 'TSK-004',
     title: 'Atualizar documentação técnica',
     description: 'Revisar e atualizar toda documentação do sistema',
     project: 'Sistema Interno',
@@ -141,7 +145,6 @@ const getPriorityIcon = (priority: string) => {
 export default function GerenciarTarefas() {
   const [tasks, setTasks] = useState(mockTasks);
   const [selectedTask, setSelectedTask] = useState<number | null>(null);
-  const [showCreateModal, setShowCreateModal] = useState(false);
   const [filterStatus, setFilterStatus] = useState('all');
   const [filterAssignee, setFilterAssignee] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
@@ -154,80 +157,21 @@ export default function GerenciarTarefas() {
   const [quickCreateTitle, setQuickCreateTitle] = useState('');
   const [dragOverColumn, setDragOverColumn] = useState<string | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
   const [showViewModal, setShowViewModal] = useState(false);
-  const [showEditModal, setShowEditModal] = useState(false);
   const [showAddColumnModal, setShowAddColumnModal] = useState(false);
   const [newColumnName, setNewColumnName] = useState('');
   const [columns, setColumns] = useState(['Pendente', 'Em andamento', 'Concluído']);
   
   const [selectedTaskForView, setSelectedTaskForView] = useState<any>(null);
-  const [selectedTaskForEdit, setSelectedTaskForEdit] = useState<any>(null);
-
-  const [newTask, setNewTask] = useState({
-    title: '',
-    description: '',
-    project: '',
-    assignee: '',
-    priority: 'Média',
-    dueDate: '',
-    estimatedHours: 0
-  });
-
-  const [editTask, setEditTask] = useState({
-    title: '',
-    description: '',
-    project: '',
-    assignee: '',
-    status: 'Pendente',
-    priority: 'Média',
-    dueDate: '',
-    estimatedHours: 0
-  });
 
   useEffect(() => {
     const modal = searchParams.get('modal');
     if (modal === 'new-task') {
-      setShowCreateModal(true);
+      navigate('/tarefas/nova');
       setSearchParams({});
     }
-  }, [searchParams, setSearchParams]);
-
-  const handleCreateTask = () => {
-    if (!newTask.title || !newTask.project || !newTask.assignee) return;
-
-    const assignee = mockUsers.find(u => u.id.toString() === newTask.assignee);
-    const project = mockProjects.find(p => p.id.toString() === newTask.project);
-
-    const task = {
-      id: Math.max(...tasks.map(t => t.id)) + 1,
-      title: newTask.title,
-      description: newTask.description,
-      project: project?.name || newTask.project,
-      assignee: assignee ? { id: assignee.id, name: assignee.name, avatar: assignee.avatar } : { id: 0, name: 'Não atribuído', avatar: 'NA' },
-      status: 'Pendente',
-      priority: newTask.priority,
-      dueDate: newTask.dueDate,
-      createdDate: new Date().toISOString().split('T')[0],
-      tags: [],
-      attachments: 0,
-      comments: 0,
-      progress: 0,
-      estimatedHours: newTask.estimatedHours,
-      completedHours: 0
-    };
-
-    setTasks([...tasks, task]);
-    setNewTask({
-      title: '',
-      description: '',
-      project: '',
-      assignee: '',
-      priority: 'Média',
-      dueDate: '',
-      estimatedHours: 0
-    });
-    setShowCreateModal(false);
-  };
+  }, [searchParams, setSearchParams, navigate]);
 
   const handleUpdateTaskStatus = (taskId: number, newStatus: string) => {
     setTasks(tasks.map(task => 
@@ -279,6 +223,7 @@ export default function GerenciarTarefas() {
 
     const task = {
       id: Math.max(...tasks.map(t => t.id)) + 1,
+      code: `TSK-${String(Math.max(...tasks.map(t => t.id)) + 1).padStart(3, '0')}`,
       title: quickCreateTitle,
       description: '',
       project: 'Projeto Rápido',
@@ -301,64 +246,15 @@ export default function GerenciarTarefas() {
   };
 
   const handleViewTask = (taskId: number) => {
-    const task = tasks.find(t => t.id === taskId);
-    if (task) {
-      setSelectedTaskForView(task);
-      setShowViewModal(true);
-    }
+    navigate(`/tarefas/${taskId}`);
+  };
+
+  const handleCreateTask = () => {
+    navigate('/tarefas/nova');
   };
 
   const handleEditTask = (taskId: number) => {
-    const task = tasks.find(t => t.id === taskId);
-    if (task) {
-      setSelectedTaskForEdit(task);
-      setEditTask({
-        title: task.title,
-        description: task.description,
-        project: task.project,
-        assignee: task.assignee.id.toString(),
-        status: task.status,
-        priority: task.priority,
-        dueDate: task.dueDate,
-        estimatedHours: task.estimatedHours
-      });
-      setShowEditModal(true);
-    }
-  };
-
-  const handleUpdateTask = () => {
-    if (!editTask.title || !editTask.project || !editTask.assignee) return;
-
-    const assignee = mockUsers.find(u => u.id.toString() === editTask.assignee);
-    
-    setTasks(tasks.map(task => 
-      task.id === selectedTaskForEdit.id 
-        ? {
-            ...task,
-            title: editTask.title,
-            description: editTask.description,
-            project: editTask.project,
-            assignee: assignee ? { id: assignee.id, name: assignee.name, avatar: assignee.avatar } : task.assignee,
-            status: editTask.status,
-            priority: editTask.priority,
-            dueDate: editTask.dueDate,
-            estimatedHours: editTask.estimatedHours
-          }
-        : task
-    ));
-
-    setShowEditModal(false);
-    setSelectedTaskForEdit(null);
-    setEditTask({
-      title: '',
-      description: '',
-      project: '',
-      assignee: '',
-      status: 'Pendente',
-      priority: 'Média',
-      dueDate: '',
-      estimatedHours: 0
-    });
+    navigate(`/tarefas/${taskId}/editar`);
   };
 
   const handleAddColumn = () => {
@@ -473,7 +369,7 @@ export default function GerenciarTarefas() {
             </div>
             
             <button
-              onClick={() => setShowCreateModal(true)}
+              onClick={handleCreateTask}
               className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center"
             >
               <Plus size={20} className="mr-2" />
@@ -504,6 +400,12 @@ export default function GerenciarTarefas() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
+                        <div className="flex items-center space-x-2 mb-2">
+                          <span className="text-xs font-medium bg-blue-100 text-blue-800 px-2 py-1 rounded-full">{task.code}</span>
+                          <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(task.status)}`}>
+                            {task.status}
+                          </span>
+                        </div>
                         <h3 className="text-lg font-medium text-gray-900 mb-1">{task.title}</h3>
                         <p className="text-sm text-gray-600 mb-2 line-clamp-2">{task.description}</p>
                         
@@ -714,7 +616,15 @@ export default function GerenciarTarefas() {
                       ) : (
                         <>
                           <div className="flex items-start justify-between mb-2">
-                            <h4 className="text-sm font-medium text-gray-900 flex-1">{task.title}</h4>
+                            <div className="flex-1">
+                              <div className="flex items-center space-x-2 mb-1">
+                                <span className="text-xs font-medium bg-blue-100 text-blue-800 px-2 py-1 rounded-full">{task.code}</span>
+                                <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(task.status)}`}>
+                                  {task.status}
+                                </span>
+                              </div>
+                              <h4 className="text-sm font-medium text-gray-900">{task.title}</h4>
+                            </div>
                             <div className="flex items-center space-x-1 ml-2">
                               <span className="text-lg">{getPriorityIcon(task.priority)}</span>
                               <button
@@ -796,130 +706,6 @@ export default function GerenciarTarefas() {
                 </div>
               </div>
             ))}
-          </div>
-        </div>
-      )}
-
-      {/* Modal de Criação */}
-      {showCreateModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-2 sm:p-4">
-          <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[95vh] overflow-y-auto">
-            <div className="p-4 sm:p-6">
-              <div className="flex items-center justify-between mb-4 sm:mb-6">
-                <h2 className="text-lg sm:text-xl font-semibold text-gray-900">Nova Tarefa</h2>
-                <button
-                  onClick={() => setShowCreateModal(false)}
-                  className="text-gray-400 hover:text-gray-600 p-1"
-                >
-                  <X size={20} />
-                </button>
-              </div>
-
-              <div className="space-y-4 sm:space-y-6">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Título *</label>
-                    <input
-                      type="text"
-                      value={newTask.title}
-                      onChange={(e) => setNewTask({...newTask, title: e.target.value})}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      placeholder="Digite o título da tarefa"
-                    />
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Projeto *</label>
-                    <select
-                      value={newTask.project}
-                      onChange={(e) => setNewTask({...newTask, project: e.target.value})}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    >
-                      <option value="">Selecione um projeto</option>
-                      {mockProjects.map(project => (
-                        <option key={project.id} value={project.id.toString()}>{project.name}</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Descrição</label>
-                  <textarea
-                    value={newTask.description}
-                    onChange={(e) => setNewTask({...newTask, description: e.target.value})}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    rows={3}
-                    placeholder="Descreva a tarefa"
-                  />
-                </div>
-                
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Responsável *</label>
-                    <select
-                      value={newTask.assignee}
-                      onChange={(e) => setNewTask({...newTask, assignee: e.target.value})}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    >
-                      <option value="">Selecione um responsável</option>
-                      {mockUsers.map(user => (
-                        <option key={user.id} value={user.id.toString()}>{user.name}</option>
-                      ))}
-                    </select>
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Prioridade</label>
-                    <select
-                      value={newTask.priority}
-                      onChange={(e) => setNewTask({...newTask, priority: e.target.value})}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    >
-                      <option value="Baixa">Baixa</option>
-                      <option value="Média">Média</option>
-                      <option value="Alta">Alta</option>
-                    </select>
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Prazo</label>
-                    <input
-                      type="date"
-                      value={newTask.dueDate}
-                      onChange={(e) => setNewTask({...newTask, dueDate: e.target.value})}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    />
-                  </div>
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Horas Estimadas</label>
-                  <input
-                    type="number"
-                    value={newTask.estimatedHours}
-                    onChange={(e) => setNewTask({...newTask, estimatedHours: parseInt(e.target.value) || 0})}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    min="0"
-                  />
-                </div>
-              </div>
-
-              <div className="flex justify-end space-x-3 mt-6">
-                <button
-                  onClick={() => setShowCreateModal(false)}
-                  className="px-4 py-2 text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
-                >
-                  Cancelar
-                </button>
-                <button
-                  onClick={handleCreateTask}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                >
-                  Criar Tarefa
-                </button>
-              </div>
-            </div>
           </div>
         </div>
       )}
@@ -1016,138 +802,6 @@ export default function GerenciarTarefas() {
                   className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
                 >
                   Editar
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Modal de Edição */}
-      {showEditModal && selectedTaskForEdit && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="p-6">
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-xl font-semibold text-gray-900">Editar Tarefa</h2>
-                <button
-                  onClick={() => setShowEditModal(false)}
-                  className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
-                >
-                  <X size={20} />
-                </button>
-              </div>
-
-              <div className="space-y-4">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Título *</label>
-                    <input
-                      type="text"
-                      value={editTask.title}
-                      onChange={(e) => setEditTask({...editTask, title: e.target.value})}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    />
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Projeto *</label>
-                    <input
-                      type="text"
-                      value={editTask.project}
-                      onChange={(e) => setEditTask({...editTask, project: e.target.value})}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    />
-                  </div>
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Descrição</label>
-                  <textarea
-                    value={editTask.description}
-                    onChange={(e) => setEditTask({...editTask, description: e.target.value})}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    rows={3}
-                  />
-                </div>
-                
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Responsável *</label>
-                    <select
-                      value={editTask.assignee}
-                      onChange={(e) => setEditTask({...editTask, assignee: e.target.value})}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    >
-                      {mockUsers.map(user => (
-                        <option key={user.id} value={user.id.toString()}>{user.name}</option>
-                      ))}
-                    </select>
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Status</label>
-                    <select
-                      value={editTask.status}
-                      onChange={(e) => setEditTask({...editTask, status: e.target.value})}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    >
-                      {columns.map(column => (
-                        <option key={column} value={column}>{column}</option>
-                      ))}
-                    </select>
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Prioridade</label>
-                    <select
-                      value={editTask.priority}
-                      onChange={(e) => setEditTask({...editTask, priority: e.target.value})}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    >
-                      <option value="Baixa">Baixa</option>
-                      <option value="Média">Média</option>
-                      <option value="Alta">Alta</option>
-                    </select>
-                  </div>
-                </div>
-                
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Prazo</label>
-                    <input
-                      type="date"
-                      value={editTask.dueDate}
-                      onChange={(e) => setEditTask({...editTask, dueDate: e.target.value})}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    />
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Horas Estimadas</label>
-                    <input
-                      type="number"
-                      value={editTask.estimatedHours}
-                      onChange={(e) => setEditTask({...editTask, estimatedHours: parseInt(e.target.value) || 0})}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      min="0"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex justify-end space-x-3 mt-6">
-                <button
-                  onClick={() => setShowEditModal(false)}
-                  className="px-4 py-2 text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
-                >
-                  Cancelar
-                </button>
-                <button
-                  onClick={handleUpdateTask}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                >
-                  Salvar Alterações
                 </button>
               </div>
             </div>

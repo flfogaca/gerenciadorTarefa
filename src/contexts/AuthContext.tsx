@@ -55,8 +55,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     };
 
-    if (password === '123456' && users[email as keyof typeof users]) {
-      const userData = users[email as keyof typeof users];
+    if (password === '123456' && users[email.toLowerCase() as keyof typeof users]) {
+      const userData = users[email.toLowerCase() as keyof typeof users];
       
       setIsAuthenticated(true);
       setUser(userData);

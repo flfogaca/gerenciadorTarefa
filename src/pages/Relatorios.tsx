@@ -12,7 +12,13 @@ import {
   PieChart,
   FileText,
   Mail,
-  Printer
+  Printer,
+  CreditCard,
+  Receipt,
+  AlertCircle,
+  CheckCircle2,
+  X,
+  Plus
 } from 'lucide-react';
 
 const mockReports = {
@@ -74,17 +80,124 @@ const mockChartData = {
   ]
 };
 
+const mockAccountsPayable = [
+  {
+    id: 1,
+    supplier: 'Equipamentos Pro Ltda',
+    description: 'Som e iluminação',
+    amount: 15000,
+    dueDate: '2025-02-15',
+    status: 'Pendente',
+    category: 'Equipamentos',
+    project: 'Evento Corporativo Q1',
+    invoice: 'NF-001234'
+  },
+  {
+    id: 2,
+    supplier: 'Design Digital Studio',
+    description: 'Identidade visual',
+    amount: 12000,
+    dueDate: '2025-02-20',
+    status: 'Pendente',
+    category: 'Design',
+    project: 'Lançamento Produto',
+    invoice: 'NF-001235'
+  },
+  {
+    id: 3,
+    supplier: 'Logística Express',
+    description: 'Transporte e montagem',
+    amount: 8000,
+    dueDate: '2025-02-10',
+    status: 'Pago',
+    category: 'Logística',
+    project: 'Workshop Digital',
+    invoice: 'NF-001236'
+  },
+  {
+    id: 4,
+    supplier: 'Catering Premium',
+    description: 'Coffee break',
+    amount: 5000,
+    dueDate: '2025-02-25',
+    status: 'Atrasado',
+    category: 'Catering',
+    project: 'Evento Corporativo Q1',
+    invoice: 'NF-001237'
+  }
+];
+
+const mockAccountsReceivable = [
+  {
+    id: 1,
+    client: 'TechCorp Brasil',
+    description: 'Evento Corporativo Q1',
+    amount: 150000,
+    dueDate: '2025-02-28',
+    status: 'Pendente',
+    project: 'Evento Corporativo Q1',
+    invoice: 'NF-001001'
+  },
+  {
+    id: 2,
+    client: 'Inovação Ltda',
+    description: 'Lançamento Produto',
+    amount: 85000,
+    dueDate: '2025-03-15',
+    status: 'Pendente',
+    project: 'Lançamento Produto',
+    invoice: 'NF-001002'
+  },
+  {
+    id: 3,
+    client: 'Academia Digital',
+    description: 'Workshop Digital',
+    amount: 25000,
+    dueDate: '2025-01-30',
+    status: 'Recebido',
+    project: 'Workshop Digital',
+    invoice: 'NF-001003'
+  },
+  {
+    id: 4,
+    client: 'TechCorp Brasil',
+    description: 'Serviços adicionais',
+    amount: 30000,
+    dueDate: '2025-01-20',
+    status: 'Atrasado',
+    project: 'Evento Corporativo Q1',
+    invoice: 'NF-001004'
+  }
+];
+
+const clients = ['TechCorp Brasil', 'Inovação Ltda', 'Academia Digital', 'Todos'];
+const projects = ['Evento Corporativo Q1', 'Lançamento Produto', 'Workshop Digital', 'Todos'];
+const categories = ['Equipamentos', 'Design', 'Logística', 'Marketing', 'Catering', 'Tecnologia', 'Todos'];
+const suppliers = ['Equipamentos Pro Ltda', 'Design Digital Studio', 'Logística Express', 'Catering Premium', 'Todos'];
+
 export default function Relatorios() {
-  const [selectedReport, setSelectedReport] = useState<'overview' | 'projects' | 'team' | 'financial' | 'time'>('overview');
+  const [selectedReport, setSelectedReport] = useState<'overview' | 'projects' | 'team' | 'financial' | 'time' | 'payable' | 'receivable'>('overview');
   const [dateRange, setDateRange] = useState('last-30-days');
   const [isGenerating, setIsGenerating] = useState(false);
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+  const [filters, setFilters] = useState({
+    client: 'Todos',
+    project: 'Todos',
+    category: 'Todos',
+    supplier: 'Todos',
+    status: 'Todos',
+    startDate: '',
+    endDate: ''
+  });
 
   const reports = [
     { id: 'overview', name: 'Visão Geral', icon: BarChart3 },
     { id: 'projects', name: 'Projetos', icon: Target },
     { id: 'team', name: 'Equipe', icon: Users },
     { id: 'financial', name: 'Financeiro', icon: DollarSign },
-    { id: 'time', name: 'Tempo', icon: Clock }
+    { id: 'time', name: 'Tempo', icon: Clock },
+    { id: 'payable', name: 'Contas a Pagar', icon: CreditCard },
+    { id: 'receivable', name: 'Contas a Receber', icon: Receipt }
   ];
 
   const handleGenerateReport = () => {
@@ -93,6 +206,47 @@ export default function Relatorios() {
       setIsGenerating(false);
     }, 2000);
   };
+
+  const handleFilterChange = (key: string, value: string) => {
+    setFilters(prev => ({ ...prev, [key]: value }));
+  };
+
+  const clearFilters = () => {
+    setFilters({
+      client: 'Todos',
+      project: 'Todos',
+      category: 'Todos',
+      supplier: 'Todos',
+      status: 'Todos',
+      startDate: '',
+      endDate: ''
+    });
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'Pago':
+      case 'Recebido': return 'bg-green-100 text-green-800';
+      case 'Pendente': return 'bg-yellow-100 text-yellow-800';
+      case 'Atrasado': return 'bg-red-100 text-red-800';
+      default: return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  const filteredAccountsPayable = mockAccountsPayable.filter(account => {
+    if (filters.supplier !== 'Todos' && account.supplier !== filters.supplier) return false;
+    if (filters.project !== 'Todos' && account.project !== filters.project) return false;
+    if (filters.category !== 'Todos' && account.category !== filters.category) return false;
+    if (filters.status !== 'Todos' && account.status !== filters.status) return false;
+    return true;
+  });
+
+  const filteredAccountsReceivable = mockAccountsReceivable.filter(account => {
+    if (filters.client !== 'Todos' && account.client !== filters.client) return false;
+    if (filters.project !== 'Todos' && account.project !== filters.project) return false;
+    if (filters.status !== 'Todos' && account.status !== filters.status) return false;
+    return true;
+  });
 
   const maxRevenue = Math.max(...mockChartData.monthlyRevenue.map(d => d.revenue));
 
@@ -141,6 +295,13 @@ export default function Relatorios() {
               ))}
             </div>
             <div className="flex items-center space-x-3">
+              <button
+                onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
+                className="bg-gray-100 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-200 transition-colors flex items-center"
+              >
+                <Filter size={20} className="mr-2" />
+                Filtros Avançados
+              </button>
               <select 
                 value={dateRange}
                 onChange={(e) => setDateRange(e.target.value)}
@@ -155,6 +316,120 @@ export default function Relatorios() {
             </div>
           </div>
         </div>
+
+        {/* Filtros Avançados */}
+        {showAdvancedFilters && (
+          <div className="p-6 border-b border-gray-200 bg-gray-50">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900">Filtros Avançados</h3>
+              <button
+                onClick={clearFilters}
+                className="text-sm text-blue-600 hover:text-blue-800 flex items-center"
+              >
+                <X size={16} className="mr-1" />
+                Limpar Filtros
+              </button>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Cliente</label>
+                <select
+                  value={filters.client}
+                  onChange={(e) => handleFilterChange('client', e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  {clients.map(client => (
+                    <option key={client} value={client}>{client}</option>
+                  ))}
+                </select>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Projeto</label>
+                <select
+                  value={filters.project}
+                  onChange={(e) => handleFilterChange('project', e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  {projects.map(project => (
+                    <option key={project} value={project}>{project}</option>
+                  ))}
+                </select>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Categoria</label>
+                <select
+                  value={filters.category}
+                  onChange={(e) => handleFilterChange('category', e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  {categories.map(category => (
+                    <option key={category} value={category}>{category}</option>
+                  ))}
+                </select>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Fornecedor</label>
+                <select
+                  value={filters.supplier}
+                  onChange={(e) => handleFilterChange('supplier', e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  {suppliers.map(supplier => (
+                    <option key={supplier} value={supplier}>{supplier}</option>
+                  ))}
+                </select>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Status</label>
+                <select
+                  value={filters.status}
+                  onChange={(e) => handleFilterChange('status', e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="Todos">Todos</option>
+                  <option value="Pendente">Pendente</option>
+                  <option value="Pago">Pago</option>
+                  <option value="Recebido">Recebido</option>
+                  <option value="Atrasado">Atrasado</option>
+                </select>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Data Início</label>
+                <input
+                  type="date"
+                  value={filters.startDate}
+                  onChange={(e) => handleFilterChange('startDate', e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Data Fim</label>
+                <input
+                  type="date"
+                  value={filters.endDate}
+                  onChange={(e) => handleFilterChange('endDate', e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+              
+              <div className="flex items-end">
+                <button
+                  onClick={() => setShowAdvancedFilters(false)}
+                  className="w-full bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  Aplicar Filtros
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         <div className="p-6">
           {selectedReport === 'overview' && (
@@ -520,6 +795,172 @@ export default function Relatorios() {
                       </div>
                     </div>
                   </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {selectedReport === 'payable' && (
+            <div className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                <div className="bg-white p-6 rounded-xl border border-gray-200">
+                  <h4 className="font-semibold text-gray-900 mb-2">Total a Pagar</h4>
+                  <p className="text-3xl font-bold text-red-600">
+                    R$ {filteredAccountsPayable.reduce((sum, account) => sum + account.amount, 0).toLocaleString('pt-BR')}
+                  </p>
+                  <p className="text-sm text-gray-600 mt-1">{filteredAccountsPayable.length} contas</p>
+                </div>
+                <div className="bg-white p-6 rounded-xl border border-gray-200">
+                  <h4 className="font-semibold text-gray-900 mb-2">Pendentes</h4>
+                  <p className="text-3xl font-bold text-yellow-600">
+                    R$ {filteredAccountsPayable.filter(a => a.status === 'Pendente').reduce((sum, account) => sum + account.amount, 0).toLocaleString('pt-BR')}
+                  </p>
+                  <p className="text-sm text-gray-600 mt-1">{filteredAccountsPayable.filter(a => a.status === 'Pendente').length} contas</p>
+                </div>
+                <div className="bg-white p-6 rounded-xl border border-gray-200">
+                  <h4 className="font-semibold text-gray-900 mb-2">Atrasadas</h4>
+                  <p className="text-3xl font-bold text-red-600">
+                    R$ {filteredAccountsPayable.filter(a => a.status === 'Atrasado').reduce((sum, account) => sum + account.amount, 0).toLocaleString('pt-BR')}
+                  </p>
+                  <p className="text-sm text-gray-600 mt-1">{filteredAccountsPayable.filter(a => a.status === 'Atrasado').length} contas</p>
+                </div>
+                <div className="bg-white p-6 rounded-xl border border-gray-200">
+                  <h4 className="font-semibold text-gray-900 mb-2">Pagas</h4>
+                  <p className="text-3xl font-bold text-green-600">
+                    R$ {filteredAccountsPayable.filter(a => a.status === 'Pago').reduce((sum, account) => sum + account.amount, 0).toLocaleString('pt-BR')}
+                  </p>
+                  <p className="text-sm text-gray-600 mt-1">{filteredAccountsPayable.filter(a => a.status === 'Pago').length} contas</p>
+                </div>
+              </div>
+
+              <div className="bg-white p-6 rounded-xl border border-gray-200">
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-lg font-semibold text-gray-900">Contas a Pagar</h3>
+                  <button className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center">
+                    <Plus size={20} className="mr-2" />
+                    Nova Conta
+                  </button>
+                </div>
+                
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Fornecedor</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Descrição</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Projeto</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Valor</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Vencimento</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Ações</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200">
+                      {filteredAccountsPayable.map((account) => (
+                        <tr key={account.id} className="hover:bg-gray-50">
+                          <td className="px-4 py-3 text-sm font-medium text-gray-900">{account.supplier}</td>
+                          <td className="px-4 py-3 text-sm text-gray-900">{account.description}</td>
+                          <td className="px-4 py-3 text-sm text-gray-900">{account.project}</td>
+                          <td className="px-4 py-3 text-sm font-medium text-gray-900">R$ {account.amount.toLocaleString('pt-BR')}</td>
+                          <td className="px-4 py-3 text-sm text-gray-900">{new Date(account.dueDate).toLocaleDateString('pt-BR')}</td>
+                          <td className="px-4 py-3">
+                            <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(account.status)}`}>
+                              {account.status}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="flex items-center space-x-2">
+                              <button className="text-blue-600 hover:text-blue-800 text-sm">Pagar</button>
+                              <button className="text-gray-600 hover:text-gray-800 text-sm">Editar</button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {selectedReport === 'receivable' && (
+            <div className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                <div className="bg-white p-6 rounded-xl border border-gray-200">
+                  <h4 className="font-semibold text-gray-900 mb-2">Total a Receber</h4>
+                  <p className="text-3xl font-bold text-green-600">
+                    R$ {filteredAccountsReceivable.reduce((sum, account) => sum + account.amount, 0).toLocaleString('pt-BR')}
+                  </p>
+                  <p className="text-sm text-gray-600 mt-1">{filteredAccountsReceivable.length} contas</p>
+                </div>
+                <div className="bg-white p-6 rounded-xl border border-gray-200">
+                  <h4 className="font-semibold text-gray-900 mb-2">Pendentes</h4>
+                  <p className="text-3xl font-bold text-yellow-600">
+                    R$ {filteredAccountsReceivable.filter(a => a.status === 'Pendente').reduce((sum, account) => sum + account.amount, 0).toLocaleString('pt-BR')}
+                  </p>
+                  <p className="text-sm text-gray-600 mt-1">{filteredAccountsReceivable.filter(a => a.status === 'Pendente').length} contas</p>
+                </div>
+                <div className="bg-white p-6 rounded-xl border border-gray-200">
+                  <h4 className="font-semibold text-gray-900 mb-2">Atrasadas</h4>
+                  <p className="text-3xl font-bold text-red-600">
+                    R$ {filteredAccountsReceivable.filter(a => a.status === 'Atrasado').reduce((sum, account) => sum + account.amount, 0).toLocaleString('pt-BR')}
+                  </p>
+                  <p className="text-sm text-gray-600 mt-1">{filteredAccountsReceivable.filter(a => a.status === 'Atrasado').length} contas</p>
+                </div>
+                <div className="bg-white p-6 rounded-xl border border-gray-200">
+                  <h4 className="font-semibold text-gray-900 mb-2">Recebidas</h4>
+                  <p className="text-3xl font-bold text-green-600">
+                    R$ {filteredAccountsReceivable.filter(a => a.status === 'Recebido').reduce((sum, account) => sum + account.amount, 0).toLocaleString('pt-BR')}
+                  </p>
+                  <p className="text-sm text-gray-600 mt-1">{filteredAccountsReceivable.filter(a => a.status === 'Recebido').length} contas</p>
+                </div>
+              </div>
+
+              <div className="bg-white p-6 rounded-xl border border-gray-200">
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-lg font-semibold text-gray-900">Contas a Receber</h3>
+                  <button className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center">
+                    <Plus size={20} className="mr-2" />
+                    Nova Conta
+                  </button>
+                </div>
+                
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Cliente</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Descrição</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Projeto</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Valor</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Vencimento</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Ações</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200">
+                      {filteredAccountsReceivable.map((account) => (
+                        <tr key={account.id} className="hover:bg-gray-50">
+                          <td className="px-4 py-3 text-sm font-medium text-gray-900">{account.client}</td>
+                          <td className="px-4 py-3 text-sm text-gray-900">{account.description}</td>
+                          <td className="px-4 py-3 text-sm text-gray-900">{account.project}</td>
+                          <td className="px-4 py-3 text-sm font-medium text-gray-900">R$ {account.amount.toLocaleString('pt-BR')}</td>
+                          <td className="px-4 py-3 text-sm text-gray-900">{new Date(account.dueDate).toLocaleDateString('pt-BR')}</td>
+                          <td className="px-4 py-3">
+                            <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(account.status)}`}>
+                              {account.status}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="flex items-center space-x-2">
+                              <button className="text-green-600 hover:text-green-800 text-sm">Receber</button>
+                              <button className="text-gray-600 hover:text-gray-800 text-sm">Editar</button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               </div>
             </div>

@@ -18,7 +18,10 @@ import {
   Trash2,
   FileText,
   X,
-  Save
+  Save,
+  BarChart3,
+  PieChart,
+  TrendingUp as ChartTrendingUp
 } from 'lucide-react';
 
 const mockFinancialData = [
@@ -503,10 +506,222 @@ export default function Financeiro() {
           )}
 
           {activeTab === 'reports' && (
-            <div className="text-center py-12 text-gray-500">
-              <Receipt size={48} className="mx-auto mb-4 text-gray-300" />
-              <p>Relatórios financeiros em desenvolvimento</p>
-              <p className="text-sm">Esta funcionalidade será implementada em breve</p>
+            <div className="space-y-6">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-semibold text-gray-900">Orçado vs Realizado</h3>
+                    <BarChart3 className="text-blue-600" size={20} />
+                  </div>
+                  <div className="space-y-4">
+                    {mockFinancialData.map((project) => {
+                      const percentage = (project.expensesRegistered / project.budgetApproved) * 100;
+                      return (
+                        <div key={project.id} className="space-y-2">
+                          <div className="flex justify-between text-sm">
+                            <span className="font-medium text-gray-700">{project.projectName}</span>
+                            <span className="text-gray-600">{percentage.toFixed(1)}%</span>
+                          </div>
+                          <div className="w-full bg-gray-200 rounded-full h-2">
+                            <div 
+                              className={`h-2 rounded-full transition-all duration-300 ${
+                                percentage > 90 ? 'bg-red-500' : percentage > 70 ? 'bg-yellow-500' : 'bg-green-500'
+                              }`}
+                              style={{ width: `${Math.min(percentage, 100)}%` }}
+                            ></div>
+                          </div>
+                          <div className="flex justify-between text-xs text-gray-500">
+                            <span>R$ {project.expensesRegistered.toLocaleString('pt-BR')}</span>
+                            <span>R$ {project.budgetApproved.toLocaleString('pt-BR')}</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-semibold text-gray-900">Custos por Categoria</h3>
+                    <PieChart className="text-green-600" size={20} />
+                  </div>
+                  <div className="space-y-3">
+                    {categories.map((category, index) => {
+                      const total = mockExpenses
+                        .filter(expense => expense.category === category)
+                        .reduce((sum, expense) => sum + expense.value, 0);
+                      const percentage = (total / mockExpenses.reduce((sum, expense) => sum + expense.value, 0)) * 100;
+                      const colors = ['bg-purple-500', 'bg-blue-500', 'bg-green-500', 'bg-yellow-500', 'bg-orange-500', 'bg-pink-500', 'bg-indigo-500'];
+                      
+                      return (
+                        <div key={category} className="flex items-center justify-between">
+                          <div className="flex items-center">
+                            <div className={`w-3 h-3 rounded-full mr-3 ${colors[index]}`}></div>
+                            <span className="text-sm text-gray-600">{category}</span>
+                          </div>
+                          <div className="text-right">
+                            <span className="text-sm font-medium text-gray-900">
+                              R$ {total.toLocaleString('pt-BR')}
+                            </span>
+                            <span className="text-xs text-gray-500 ml-2">
+                              ({percentage.toFixed(1)}%)
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-semibold text-gray-900">Fluxo de Caixa</h3>
+                    <ChartTrendingUp className="text-purple-600" size={20} />
+                  </div>
+                  <div className="space-y-3">
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-gray-600">Entradas</span>
+                      <span className="text-sm font-semibold text-green-600">
+                        R$ {(totalPaid + totalToReceive).toLocaleString('pt-BR')}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-gray-600">Saídas</span>
+                      <span className="text-sm font-semibold text-red-600">
+                        R$ {totalExpenses.toLocaleString('pt-BR')}
+                      </span>
+                    </div>
+                    <div className="border-t pt-3">
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm font-medium text-gray-900">Saldo</span>
+                        <span className={`text-sm font-semibold ${totalMargin >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                          R$ {totalMargin.toLocaleString('pt-BR')}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-semibold text-gray-900">Margem por Projeto</h3>
+                    <TrendingUp className="text-blue-600" size={20} />
+                  </div>
+                  <div className="space-y-3">
+                    {mockFinancialData.map((project) => {
+                      const marginPercentage = (project.margin / project.budgetApproved) * 100;
+                      return (
+                        <div key={project.id} className="space-y-1">
+                          <div className="flex justify-between text-sm">
+                            <span className="text-gray-700 truncate">{project.projectName}</span>
+                            <span className={`font-medium ${marginPercentage >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                              {marginPercentage.toFixed(1)}%
+                            </span>
+                          </div>
+                          <div className="text-xs text-gray-500">
+                            R$ {project.margin.toLocaleString('pt-BR')}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-semibold text-gray-900">Status de Pagamentos</h3>
+                    <Clock className="text-yellow-600" size={20} />
+                  </div>
+                  <div className="space-y-3">
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-gray-600">Pagos</span>
+                      <span className="text-sm font-semibold text-green-600">
+                        R$ {totalPaid.toLocaleString('pt-BR')}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-gray-600">Pendentes</span>
+                      <span className="text-sm font-semibold text-yellow-600">
+                        R$ {(totalExpenses - totalPaid).toLocaleString('pt-BR')}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-gray-600">A Receber</span>
+                      <span className="text-sm font-semibold text-blue-600">
+                        R$ {totalToReceive.toLocaleString('pt-BR')}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-lg font-semibold text-gray-900">Relatórios Detalhados</h3>
+                  <div className="flex space-x-2">
+                    <select className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                      <option value="all">Todos os Projetos</option>
+                      {mockFinancialData.map(project => (
+                        <option key={project.id} value={project.id}>{project.projectName}</option>
+                      ))}
+                    </select>
+                    <select className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                      <option value="all">Todos os Clientes</option>
+                      {mockFinancialData.map(project => (
+                        <option key={project.id} value={project.client}>{project.client}</option>
+                      ))}
+                    </select>
+                    <select className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                      <option value="month">Último Mês</option>
+                      <option value="quarter">Último Trimestre</option>
+                      <option value="year">Último Ano</option>
+                    </select>
+                    <button className="btn-primary flex items-center">
+                      <Download size={16} className="mr-2" />
+                      Exportar
+                    </button>
+                  </div>
+                </div>
+                
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-gray-200">
+                        <th className="text-left py-3 px-4 font-medium text-gray-700">Projeto</th>
+                        <th className="text-left py-3 px-4 font-medium text-gray-700">Cliente</th>
+                        <th className="text-right py-3 px-4 font-medium text-gray-700">Budget</th>
+                        <th className="text-right py-3 px-4 font-medium text-gray-700">Gasto</th>
+                        <th className="text-right py-3 px-4 font-medium text-gray-700">Margem</th>
+                        <th className="text-center py-3 px-4 font-medium text-gray-700">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {mockFinancialData.map((project) => (
+                        <tr key={project.id} className="border-b border-gray-100 hover:bg-gray-50">
+                          <td className="py-3 px-4 font-medium text-gray-900">{project.projectName}</td>
+                          <td className="py-3 px-4 text-gray-600">{project.client}</td>
+                          <td className="py-3 px-4 text-right font-medium text-gray-900">
+                            R$ {project.budgetApproved.toLocaleString('pt-BR')}
+                          </td>
+                          <td className="py-3 px-4 text-right font-medium text-gray-900">
+                            R$ {project.expensesRegistered.toLocaleString('pt-BR')}
+                          </td>
+                          <td className="py-3 px-4 text-right font-medium text-gray-900">
+                            R$ {project.margin.toLocaleString('pt-BR')}
+                          </td>
+                          <td className="py-3 px-4 text-center">
+                            <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(project.status)}`}>
+                              {project.status}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             </div>
           )}
         </div>

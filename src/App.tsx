@@ -1,10 +1,14 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import Layout from './components/Layout';
+import Landing from './pages/Landing';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Cronograma from './pages/Cronograma';
 import GerenciarTarefas from './pages/GerenciarTarefas';
+import TaskDetail from './pages/TaskDetail';
+import CreateTask from './pages/CreateTask';
+import EditTask from './pages/EditTask';
 import Financeiro from './pages/Financeiro';
 import Administrativo from './pages/Administrativo';
 import Configuracoes from './pages/Configuracoes';
@@ -28,7 +32,7 @@ function AppRoutes() {
 
   return (
     <Routes>
-      <Route path="/" element={<Login />} />
+      <Route path="/" element={<Landing />} />
       <Route path="/login" element={<Login />} />
       {isAuthenticated ? (
         <Route path="/" element={<Layout />}>
@@ -41,6 +45,21 @@ function AppRoutes() {
           <Route path="tarefas" element={
             <ProtectedRoute permission="tarefas">
               <GerenciarTarefas />
+            </ProtectedRoute>
+          } />
+          <Route path="tarefas/:id" element={
+            <ProtectedRoute permission="tarefas">
+              <TaskDetail />
+            </ProtectedRoute>
+          } />
+          <Route path="tarefas/nova" element={
+            <ProtectedRoute permission="tarefas">
+              <CreateTask />
+            </ProtectedRoute>
+          } />
+          <Route path="tarefas/:id/editar" element={
+            <ProtectedRoute permission="tarefas">
+              <EditTask />
             </ProtectedRoute>
           } />
           <Route path="financeiro" element={

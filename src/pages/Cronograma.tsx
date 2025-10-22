@@ -130,12 +130,63 @@ export default function Cronograma() {
   const [viewMode, setViewMode] = useState<'list' | 'gantt' | 'calendar'>('list');
   const [selectedProject, setSelectedProject] = useState('all');
   const [selectedArea, setSelectedArea] = useState('all');
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [activities, setActivities] = useState(mockActivities);
 
-  const filteredActivities = mockActivities.filter(activity => {
+  const [newActivity, setNewActivity] = useState({
+    projectId: '',
+    projectName: '',
+    client: '',
+    area: '',
+    activity: '',
+    responsible: '',
+    startDate: '',
+    endDate: '',
+    status: 'Pendente',
+    progress: 0,
+    attachments: 0
+  });
+
+  const filteredActivities = activities.filter(activity => {
     if (selectedProject !== 'all' && activity.projectId.toString() !== selectedProject) return false;
     if (selectedArea !== 'all' && activity.area !== selectedArea) return false;
     return true;
   });
+
+  const handleCreateActivity = () => {
+    if (!newActivity.projectName || !newActivity.activity || !newActivity.responsible || !newActivity.startDate || !newActivity.endDate) return;
+
+    const activity = {
+      id: Math.max(...activities.map(a => a.id)) + 1,
+      projectId: parseInt(newActivity.projectId) || 1,
+      projectName: newActivity.projectName,
+      client: newActivity.client,
+      area: newActivity.area,
+      activity: newActivity.activity,
+      responsible: newActivity.responsible,
+      startDate: newActivity.startDate,
+      endDate: newActivity.endDate,
+      status: newActivity.status,
+      progress: newActivity.progress,
+      attachments: newActivity.attachments
+    };
+
+    setActivities([...activities, activity]);
+    setShowCreateModal(false);
+    setNewActivity({
+      projectId: '',
+      projectName: '',
+      client: '',
+      area: '',
+      activity: '',
+      responsible: '',
+      startDate: '',
+      endDate: '',
+      status: 'Pendente',
+      progress: 0,
+      attachments: 0
+    });
+  };
 
   return (
     <div className="space-y-6">
@@ -144,7 +195,10 @@ export default function Cronograma() {
           <h1 className="text-3xl font-bold text-gray-900">Cronograma Projetos</h1>
           <p className="text-gray-600 mt-2">Gestão detalhada de atividades e prazos</p>
         </div>
-        <button className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center">
+        <button 
+          onClick={() => setShowCreateModal(true)}
+          className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center"
+        >
           <Plus size={20} className="mr-2" />
           Nova Atividade
         </button>
@@ -348,6 +402,154 @@ export default function Cronograma() {
           </div>
         </div>
       </div>
+
+      {/* Modal de Nova Atividade */}
+      {showCreateModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-semibold text-gray-900">Nova Atividade</h2>
+                <button
+                  onClick={() => setShowCreateModal(false)}
+                  className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
+                >
+                  <Plus size={20} className="rotate-45" />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Nome do Projeto *</label>
+                    <input
+                      type="text"
+                      value={newActivity.projectName}
+                      onChange={(e) => setNewActivity({...newActivity, projectName: e.target.value})}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="Digite o nome do projeto"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Cliente</label>
+                    <input
+                      type="text"
+                      value={newActivity.client}
+                      onChange={(e) => setNewActivity({...newActivity, client: e.target.value})}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="Nome do cliente"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Área *</label>
+                    <select
+                      value={newActivity.area}
+                      onChange={(e) => setNewActivity({...newActivity, area: e.target.value})}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    >
+                      <option value="">Selecione uma área</option>
+                      <option value="Negócios">Negócios</option>
+                      <option value="Gestão de Projeto">Gestão de Projeto</option>
+                      <option value="Planejamento">Planejamento</option>
+                      <option value="Criação">Criação</option>
+                      <option value="Produção">Produção</option>
+                      <option value="Arquitetura">Arquitetura</option>
+                      <option value="Financeiro">Financeiro</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Responsável *</label>
+                    <input
+                      type="text"
+                      value={newActivity.responsible}
+                      onChange={(e) => setNewActivity({...newActivity, responsible: e.target.value})}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="Nome do responsável"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Data de Início *</label>
+                    <input
+                      type="date"
+                      value={newActivity.startDate}
+                      onChange={(e) => setNewActivity({...newActivity, startDate: e.target.value})}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Data de Fim *</label>
+                    <input
+                      type="date"
+                      value={newActivity.endDate}
+                      onChange={(e) => setNewActivity({...newActivity, endDate: e.target.value})}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Atividade *</label>
+                  <textarea
+                    value={newActivity.activity}
+                    onChange={(e) => setNewActivity({...newActivity, activity: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    rows={3}
+                    placeholder="Descreva a atividade"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                    <select
+                      value={newActivity.status}
+                      onChange={(e) => setNewActivity({...newActivity, status: e.target.value})}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    >
+                      <option value="Pendente">Pendente</option>
+                      <option value="Em Andamento">Em Andamento</option>
+                      <option value="Concluído">Concluído</option>
+                      <option value="Parado">Parado</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Progresso (%)</label>
+                    <input
+                      type="number"
+                      value={newActivity.progress}
+                      onChange={(e) => setNewActivity({...newActivity, progress: parseInt(e.target.value) || 0})}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      min="0"
+                      max="100"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex justify-end space-x-3 mt-6">
+                <button
+                  onClick={() => setShowCreateModal(false)}
+                  className="px-4 py-2 text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleCreateActivity}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  Criar Atividade
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

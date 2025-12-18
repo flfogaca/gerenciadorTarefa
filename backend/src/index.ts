@@ -185,11 +185,20 @@ class Application {
 
   private configureHealthCheckRoutes(): void {
     this.app.get('/health', (_req, res) => {
+      console.log('Health check called: /health');
       res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
     });
     
     this.app.get('/api/v1/health', (_req, res) => {
+      console.log('Health check called: /api/v1/health');
       res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
+    });
+    
+    this.app.get('*', (req, res, next) => {
+      if (req.path === '/health' || req.path === '/api/v1/health') {
+        return next();
+      }
+      next();
     });
   }
 
@@ -278,7 +287,10 @@ class Application {
     const port = parseInt(process.env['PORT'] || '3001', 10);
     const host = process.env['HOST'] || '0.0.0.0';
     
+    console.log(`🔧 Configurando servidor na porta ${port}, host ${host}...`);
+    
     this.httpServer.listen(port, host, () => {
+      console.log(`✅ Servidor HTTP escutando em ${host}:${port}`);
       this.logger.info(`Server running on ${host}:${port}`);
       this.logger.info(`Environment: ${process.env['NODE_ENV'] || 'development'}`);
       console.log(`✅ Servidor iniciado com sucesso na porta ${port}!`);
@@ -290,18 +302,28 @@ class Application {
     });
 
     this.httpServer.on('error', (error: Error) => {
+      console.error('❌ Erro ao iniciar servidor:', error);
       this.logger.error('Server error', { error: error.message });
       process.exit(1);
     });
 
+    this.httpServer.on('listening', () => {
+      console.log('✅ Servidor está escutando!');
+    });
+
     setTimeout(async () => {
       try {
+        console.log('🔌 Tentando conectar ao banco de dados...');
         await this.databaseService.connect();
         this.logger.info('Database connected successfully');
+        console.log('✅ Banco de dados conectado!');
 
+        console.log('🔄 Executando migrações...');
         await this.databaseService.runMigrations();
         this.logger.info('Database migrations completed');
+        console.log('✅ Migrações concluídas!');
       } catch (error) {
+        console.error('⚠️ Erro ao conectar ao banco:', error);
         this.logger.error('Failed to connect to database', {
           error: (error as Error).message,
           stack: (error as Error).stack

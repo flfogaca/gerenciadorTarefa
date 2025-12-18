@@ -182,9 +182,16 @@ class Application {
   }
 
   private configureRoutes(): void {
+    this.app.get('/health', (_req, res) => {
+      res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
+    });
+    
+    this.app.get('/api/v1/health', (_req, res) => {
+      res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
+    });
+    
     const { healthCheck, livenessCheck, readinessCheck } = require('@/presentation/middleware/health-check');
-    this.app.get('/health', healthCheck);
-    this.app.get('/api/v1/health', healthCheck);
+    this.app.get('/health/detailed', healthCheck);
     this.app.get('/health/live', livenessCheck);
     this.app.get('/health/ready', readinessCheck);
 
@@ -264,38 +271,32 @@ class Application {
   }
 
   public async start(): Promise<void> {
+    const port = parseInt(process.env['PORT'] || '3001', 10);
+    const host = process.env['HOST'] || '0.0.0.0';
+    
+    this.httpServer.listen(port, host, () => {
+      this.logger.info(`Server running on ${host}:${port}`);
+      this.logger.info(`Environment: ${process.env['NODE_ENV'] || 'development'}`);
+      console.log(`✅ Servidor iniciado com sucesso na porta ${port}!`);
+      console.log(`🚀 Backend rodando em: http://${host}:${port}`);
+      console.log(`🔌 WebSocket/Socket.IO disponível em: ws://${host}:${port}/socket.io`);
+      console.log(`🏥 Health check disponível em: http://${host}:${port}/health`);
+      console.log(`📊 API disponível em: http://${host}:${port}/api/v1`);
+      console.log(`🔗 Health da API: http://${host}:${port}/api/v1/health`);
+    });
+
     try {
-      // Conectar ao banco de dados
       await this.databaseService.connect();
       this.logger.info('Database connected successfully');
 
-      // Executar migrações
       await this.databaseService.runMigrations();
       this.logger.info('Database migrations completed');
-
-      // Iniciar servidor
-      const port = parseInt(process.env['PORT'] || '3001', 10);
-      const host = process.env['HOST'] || '0.0.0.0';
-      console.log(`🔧 Iniciando servidor na porta ${port}...`);
-      
-      this.httpServer.listen(port, host, () => {
-        this.logger.info(`Server running on ${host}:${port}`);
-        this.logger.info(`Environment: ${process.env['NODE_ENV'] || 'development'}`);
-      });
-      
-      console.log(`✅ Servidor iniciado com sucesso na porta ${port}!`);
-      console.log(`🚀 Backend rodando em: http://localhost:${port}`);
-      console.log(`🔌 WebSocket/Socket.IO disponível em: ws://localhost:${port}/socket.io`);
-      console.log(`🏥 Health check disponível em: http://localhost:${port}/health`);
-      console.log(`📊 API disponível em: http://localhost:${port}/api/v1`);
-      console.log(`🔗 Health da API: http://localhost:${port}/api/v1/health`);
-
     } catch (error) {
-      this.logger.error('Failed to start application', {
+      this.logger.error('Failed to connect to database', {
         error: (error as Error).message,
         stack: (error as Error).stack
       });
-      process.exit(1);
+      this.logger.warn('Server started but database connection failed. Some features may not work.');
     }
   }
 

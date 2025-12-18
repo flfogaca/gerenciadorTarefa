@@ -4,14 +4,14 @@ WORKDIR /app
 
 RUN apk add --no-cache openssl
 
-COPY backend/package*.json ./
-COPY backend/prisma ./prisma/
+COPY package*.json ./
+COPY prisma ./prisma/
 
 RUN npm ci
 
 RUN npx prisma generate
 
-COPY backend/ .
+COPY . .
 
 RUN npm run build
 
@@ -45,6 +45,3 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
 ENTRYPOINT ["dumb-init", "--"]
 
 CMD ["sh", "-c", "npx prisma migrate deploy && node dist/index.js"]
-
-
-

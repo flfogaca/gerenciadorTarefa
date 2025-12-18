@@ -111,37 +111,51 @@ function checkMemory(): ComponentHealth {
 }
 
 export async function healthCheck(_req: Request, res: Response): Promise<void> {
-  const [database, redis, memory] = await Promise.all([
-    checkDatabase(),
-    checkRedis(),
-    Promise.resolve(checkMemory()),
-  ]);
+  try {
+    const [database, redis, memory] = await Promise.all([
+      checkDatabase().catch(() => ({ status: 'down' as const, message: 'Database check failed' })),
+      checkRedis().catch(() => ({ status: 'down' as const, message: 'Redis check failed' })),
+      Promise.resolve(checkMemory()),
+    ]);
 
-  const checks = { database, redis, memory };
+    const checks = { database, redis, memory };
 
-  let overallStatus: 'healthy' | 'degraded' | 'unhealthy' = 'healthy';
+    let overallStatus: 'healthy' | 'degraded' | 'unhealthy' = 'healthy';
 
-  if (database.status === 'down') {
-    overallStatus = 'unhealthy';
-  } else if (
-    database.status === 'degraded' ||
-    redis.status === 'down' ||
-    memory.status === 'degraded'
-  ) {
-    overallStatus = 'degraded';
+    if (database.status === 'down') {
+      overallStatus = 'unhealthy';
+    } else if (
+      database.status === 'degraded' ||
+      memory.status === 'degraded'
+    ) {
+      overallStatus = 'degraded';
+    }
+
+    const result: HealthCheckResult = {
+      status: overallStatus,
+      timestamp: new Date().toISOString(),
+      uptime: process.uptime(),
+      version: process.env['npm_package_version'] || '1.0.0',
+      checks,
+    };
+
+    const statusCode = overallStatus === 'healthy' ? 200 : overallStatus === 'degraded' ? 200 : 503;
+
+    res.status(statusCode).json(result);
+  } catch (error) {
+    res.status(503).json({
+      status: 'unhealthy',
+      timestamp: new Date().toISOString(),
+      uptime: process.uptime(),
+      version: process.env['npm_package_version'] || '1.0.0',
+      checks: {
+        database: { status: 'down', message: 'Health check error' },
+        redis: { status: 'down', message: 'Health check error' },
+        memory: { status: 'down', message: 'Health check error' },
+      },
+      error: error instanceof Error ? error.message : 'Unknown error',
+    });
   }
-
-  const result: HealthCheckResult = {
-    status: overallStatus,
-    timestamp: new Date().toISOString(),
-    uptime: process.uptime(),
-    version: process.env['npm_package_version'] || '1.0.0',
-    checks,
-  };
-
-  const statusCode = overallStatus === 'healthy' ? 200 : overallStatus === 'degraded' ? 200 : 503;
-
-  res.status(statusCode).json(result);
 }
 
 export async function livenessCheck(_req: Request, res: Response): Promise<void> {

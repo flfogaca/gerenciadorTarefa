@@ -182,7 +182,6 @@ class Application {
   }
 
   private configureRoutes(): void {
-    // Health checks
     const { healthCheck, livenessCheck, readinessCheck } = require('@/presentation/middleware/health-check');
     this.app.get('/health', healthCheck);
     this.app.get('/api/v1/health', healthCheck);
@@ -276,10 +275,11 @@ class Application {
 
       // Iniciar servidor
       const port = process.env['PORT'] || 3001;
+      const host = process.env['HOST'] || '0.0.0.0';
       console.log(`🔧 Iniciando servidor na porta ${port}...`);
       
-      this.httpServer.listen(port, () => {
-        this.logger.info(`Server running on port ${port}`);
+      this.httpServer.listen(port, host, () => {
+        this.logger.info(`Server running on ${host}:${port}`);
         this.logger.info(`Environment: ${process.env['NODE_ENV'] || 'development'}`);
       });
       

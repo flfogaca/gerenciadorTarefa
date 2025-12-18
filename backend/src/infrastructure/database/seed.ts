@@ -82,6 +82,24 @@ async function main() {
     }
   });
 
+  const coordenador = await prisma.user.create({
+    data: {
+      userId: 'coordenador-user-1',
+      email: 'coordenador@gestorpro.com',
+      firstName: 'Coordenador',
+      lastName: 'Projetos',
+      password: passwordHash,
+      role: 'manager',
+      tenantId: tenant.tenantId,
+      profile: {
+        phone: '+55 11 99999-5555',
+        department: 'Coordenação',
+        position: 'Coordenador de Projetos'
+      },
+      isActive: true
+    }
+  });
+
   const funcionario = await prisma.user.create({
     data: {
       userId: 'func-user-1',
@@ -470,6 +488,7 @@ async function main() {
 
   const usuariosMap = new Map();
   usuariosMap.set('gestor', gestor);
+  usuariosMap.set('coordenador', coordenador);
   usuariosMap.set('funcionario', funcionario);
   usuariosMap.set('admin', admin);
   usuariosMap.set('diretor', diretor);
@@ -1623,7 +1642,7 @@ async function main() {
   console.log('');
   console.log('📋 Dados criados:');
   console.log(`- 1 Tenant: ${tenant.name}`);
-  console.log(`- ${4 + usuariosAdicionais.length} Usuários`);
+  console.log(`- ${5 + usuariosAdicionais.length} Usuários`);
   console.log(`- ${clientes.length} Clientes`);
   console.log(`- ${fornecedores.length} Fornecedores`);
   console.log(`- ${projetos.length} Projetos`);
@@ -1638,9 +1657,10 @@ async function main() {
   console.log('');
   console.log('🔑 Credenciais de acesso (todos com senha 123456):');
   console.log('- Admin: admin@gestorpro.com');
+  console.log('- Diretor: diretor@gestorpro.com');
+  console.log('- Coordenador: coordenador@gestorpro.com');
   console.log('- Gestor: gestor@gestorpro.com');
   console.log('- Funcionário: funcionario@gestorpro.com');
-  console.log('- Diretor: diretor@gestorpro.com');
   usuariosAdicionais.forEach(u => {
     console.log(`- ${u.firstName} ${u.lastName}: ${u.email}`);
   });

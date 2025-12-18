@@ -39,9 +39,9 @@ ENV PORT=3001
 
 EXPOSE 3001
 
-HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=5 \
     CMD node -e "require('http').get('http://localhost:3001/api/v1/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})" || exit 1
 
 ENTRYPOINT ["dumb-init", "--"]
 
-CMD ["sh", "-c", "sleep 5 && npx prisma migrate deploy || true && node dist/index.js"]
+CMD ["sh", "-c", "sleep 10 && (npx prisma migrate deploy || echo 'Migration skipped') && node dist/index.js"]

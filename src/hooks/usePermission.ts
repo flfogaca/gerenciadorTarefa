@@ -101,11 +101,28 @@ export function usePermission(user: { role: string; permissions?: PermissionStri
 
   function can(permission: PermissionString) {
     if (!user) return false;
-    const hasWildcard = rolePermissions[user.role]?.some(p => p.resource === '*' && p.action === '*');
+    
+    const normalizedRole = user.role?.toUpperCase() || '';
+    const roleMap: Record<string, string> = {
+      'MANAGER': 'MANAGER',
+      'EMPLOYEE': 'EMPLOYEE',
+      'SUPER_ADMIN': 'SUPER_ADMIN',
+      'TENANT_ADMIN': 'TENANT_ADMIN',
+      'CLIENT': 'CLIENT',
+      'DIRECTOR': 'SUPER_ADMIN',
+      'ADMIN': 'TENANT_ADMIN',
+    };
+    
+    const mappedRole = roleMap[normalizedRole] || normalizedRole;
+    const permissions = rolePermissions[mappedRole] || [];
+    
+    const hasWildcard = permissions.some(p => p.resource === '*' && p.action === '*');
     if (hasWildcard) return true;
+    
     if (user.permissions?.includes('all') || user.permissions?.includes(permission)) return true;
+    
     const [resource, action = 'read'] = permission.split(':');
-    return (rolePermissions[user.role] || []).some(p => p.resource === resource && (p.action === action || p.action === '*'));
+    return permissions.some(p => p.resource === resource && (p.action === action || p.action === '*'));
   }
 
   return { can };

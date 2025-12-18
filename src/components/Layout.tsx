@@ -117,9 +117,18 @@ export default function Layout() {
     { name: 'Configurações', href: '/configuracoes', icon: Settings, permission: 'settings:read', alwaysVisible: true },
   ];
 
-  const navigation = allNavigation.filter(item => 
-    item.alwaysVisible || can(item.permission) || user?.permissions?.includes('all')
-  );
+  const navigation = allNavigation.filter(item => {
+    if (item.alwaysVisible) return true;
+    if (user?.permissions?.includes('all')) return true;
+    const hasPermission = can(item.permission);
+    if (!hasPermission) {
+      console.log(`Menu item "${item.name}" oculto - permissão necessária: ${item.permission}, role: ${user?.role}, permissions:`, user?.permissions);
+    }
+    return hasPermission;
+  });
+  
+  console.log('User data:', { role: user?.role, permissions: user?.permissions });
+  console.log('Navigation items:', navigation.map(n => n.name));
 
   const handleMarkAsRead = async (notificationId: string) => {
     try {

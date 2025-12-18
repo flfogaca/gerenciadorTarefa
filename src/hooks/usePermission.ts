@@ -1,0 +1,93 @@
+export type PermissionString = string;
+
+export function usePermission(user: { role: string; permissions?: PermissionString[] } | null) {
+  const rolePermissions: Record<string, Array<{ resource: string; action: string }>> = {
+    SUPER_ADMIN: [{ resource: '*', action: '*' }],
+    TENANT_ADMIN: [
+      { resource: 'tenant', action: 'read' },
+      { resource: 'tenant', action: 'update' },
+      { resource: 'tenant', action: 'manage_settings' },
+      { resource: 'users', action: 'create' },
+      { resource: 'users', action: 'read' },
+      { resource: 'users', action: 'update' },
+      { resource: 'users', action: 'delete' },
+      { resource: 'users', action: 'manage_permissions' },
+      { resource: 'projects', action: 'create' },
+      { resource: 'projects', action: 'read' },
+      { resource: 'projects', action: 'update' },
+      { resource: 'projects', action: 'delete' },
+      { resource: 'projects', action: 'manage_team' },
+      { resource: 'tasks', action: 'create' },
+      { resource: 'tasks', action: 'read' },
+      { resource: 'tasks', action: 'update' },
+      { resource: 'tasks', action: 'delete' },
+      { resource: 'tasks', action: 'assign' },
+      { resource: 'reports', action: 'read' },
+      { resource: 'reports', action: 'create' },
+      { resource: 'finance', action: 'read' },
+      { resource: 'finance', action: 'update' },
+      { resource: 'administrative', action: 'read' },
+      { resource: 'administrative', action: 'update' },
+      { resource: 'clients', action: 'create' },
+      { resource: 'clients', action: 'read' },
+      { resource: 'clients', action: 'update' },
+      { resource: 'clients', action: 'delete' },
+      { resource: 'suppliers', action: 'create' },
+      { resource: 'suppliers', action: 'read' },
+      { resource: 'suppliers', action: 'update' },
+      { resource: 'suppliers', action: 'delete' },
+    ],
+    MANAGER: [
+      { resource: 'projects', action: 'create' },
+      { resource: 'projects', action: 'read' },
+      { resource: 'projects', action: 'update' },
+      { resource: 'projects', action: 'manage_team' },
+      { resource: 'tasks', action: 'create' },
+      { resource: 'tasks', action: 'read' },
+      { resource: 'tasks', action: 'update' },
+      { resource: 'tasks', action: 'assign' },
+      { resource: 'tasks', action: 'delete' },
+      { resource: 'reports', action: 'read' },
+      { resource: 'reports', action: 'create' },
+      { resource: 'finance', action: 'read' },
+      { resource: 'users', action: 'read' },
+      { resource: 'clients', action: 'create' },
+      { resource: 'clients', action: 'read' },
+      { resource: 'clients', action: 'update' },
+      { resource: 'suppliers', action: 'create' },
+      { resource: 'suppliers', action: 'read' },
+      { resource: 'suppliers', action: 'update' },
+    ],
+    EMPLOYEE: [
+      { resource: 'tasks', action: 'read' },
+      { resource: 'tasks', action: 'update' },
+      { resource: 'tasks', action: 'log_time' },
+      { resource: 'projects', action: 'read' },
+      { resource: 'reports', action: 'read' },
+      { resource: 'profile', action: 'read' },
+      { resource: 'profile', action: 'update' },
+      { resource: 'clients', action: 'read' },
+      { resource: 'suppliers', action: 'read' },
+    ],
+    CLIENT: [
+      { resource: 'projects', action: 'read' },
+      { resource: 'tasks', action: 'read' },
+      { resource: 'reports', action: 'read' },
+      { resource: 'profile', action: 'read' },
+      { resource: 'profile', action: 'update' },
+      { resource: 'clients', action: 'read' },
+      { resource: 'suppliers', action: 'read' },
+    ],
+  };
+
+  function can(permission: PermissionString) {
+    if (!user) return false;
+    const hasWildcard = rolePermissions[user.role]?.some(p => p.resource === '*' && p.action === '*');
+    if (hasWildcard) return true;
+    if (user.permissions?.includes('all') || user.permissions?.includes(permission)) return true;
+    const [resource, action = 'read'] = permission.split(':');
+    return (rolePermissions[user.role] || []).some(p => p.resource === resource && (p.action === action || p.action === '*'));
+  }
+
+  return { can };
+}

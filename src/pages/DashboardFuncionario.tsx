@@ -1,4 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useAuth } from '../contexts/AuthContext';
+import apiService from '../services/api';
+import { taskStatusToLabel, taskPriorityToLabel } from '../utils/statusMapper';
 import { 
   CheckCircle2, 
   Clock, 
@@ -12,60 +15,6 @@ import {
   Target,
   TrendingUp
 } from 'lucide-react';
-
-const mockTasks = [
-  {
-    id: 1,
-    title: 'Criar apresentação do projeto',
-    project: 'Evento Corporativo Q1',
-    status: 'Em andamento',
-    priority: 'Alta',
-    dueDate: '2024-01-25',
-    estimatedHours: 8,
-    completedHours: 5,
-    assignee: 'Pedro Costa'
-  },
-  {
-    id: 2,
-    title: 'Revisar cronograma de atividades',
-    project: 'Lançamento Produto',
-    status: 'Pendente',
-    priority: 'Média',
-    dueDate: '2024-01-28',
-    estimatedHours: 4,
-    completedHours: 0,
-    assignee: 'Pedro Costa'
-  },
-  {
-    id: 3,
-    title: 'Preparar material de treinamento',
-    project: 'Workshop Digital',
-    status: 'Concluído',
-    priority: 'Baixa',
-    dueDate: '2024-01-20',
-    estimatedHours: 6,
-    completedHours: 6,
-    assignee: 'Pedro Costa'
-  },
-  {
-    id: 4,
-    title: 'Atualizar documentação técnica',
-    project: 'Sistema Interno',
-    status: 'Em andamento',
-    priority: 'Média',
-    dueDate: '2024-01-30',
-    estimatedHours: 12,
-    completedHours: 3,
-    assignee: 'Pedro Costa'
-  }
-];
-
-const stats = [
-  { name: 'Tarefas Ativas', value: '8', change: '+2', changeType: 'positive', icon: Target },
-  { name: 'Horas Trabalhadas', value: '32h', change: '+5h', changeType: 'positive', icon: Clock },
-  { name: 'Taxa de Conclusão', value: '87%', change: '+12%', changeType: 'positive', icon: TrendingUp },
-  { name: 'Projetos Ativos', value: '4', change: '+1', changeType: 'positive', icon: FileText },
-];
 
 const getStatusColor = (status: string) => {
   switch (status) {
@@ -87,20 +36,156 @@ const getPriorityColor = (priority: string) => {
 };
 
 export default function DashboardFuncionario() {
-  const [selectedTask, setSelectedTask] = useState<number | null>(null);
-  const [activeTimer, setActiveTimer] = useState<number | null>(null);
+  const { user } = useAuth();
+  const [selectedTask, setSelectedTask] = useState<string | null>(null);
+  const [activeTimer, setActiveTimer] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [tasks, setTasks] = useState<any[]>([]);
+  const [projects, setProjects] = useState<any[]>([]);
+  const [stats, setStats] = useState({
+    activeTasks: 0,
+    workedHours: 0,
+    completionRate: 0,
+    activeProjects: 0
+  });
 
-  const handleTaskClick = (taskId: number) => {
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const loadData = async () => {
+    try {
+      setIsLoading(true);
+      
+      const response = await apiService.getEmployeeDashboard();
+      const dashboardData = response?.data;
+
+      if (dashboardData) {
+        setStats({
+          activeTasks: dashboardData.summary?.tasks?.inProgress || 0,
+          workedHours: dashboardData.summary?.timeTracking?.completedHours || 0,
+          completionRate: 0,
+          activeProjects: dashboardData.summary?.projects?.total || 0
+        });
+
+        if (dashboardData.myTasks) {
+          setTasks(dashboardData.myTasks);
+        }
+
+        if (dashboardData.upcomingDeadlines) {
+          const allTasks = [...(dashboardData.myTasks || []), ...(dashboardData.upcomingDeadlines || [])];
+          setTasks(allTasks);
+        }
+      } else {
+        const [tasksRes, projectsRes] = await Promise.all([
+          apiService.getTasks(),
+          apiService.getProjects()
+        ]);
+
+        const tasksData = tasksRes?.data?.tasks || [];
+        const projectsData = projectsRes?.data?.projects || [];
+
+        const userTasks = tasksData.filter((task: any) => 
+          task.assigneeId === user?.id || task.assignee?.id === user?.id
+        );
+
+        setTasks(userTasks);
+        setProjects(projectsData);
+
+        const activeTasks = userTasks.filter((t: any) => 
+          t.status === 'in_progress' || t.status === 'IN_PROGRESS'
+        ).length;
+
+        const totalHours = userTasks.reduce((sum: number, task: any) => {
+          return sum + (parseFloat(task.timeLogged?.totalHours || '0') || 0);
+        }, 0);
+
+        const completedTasks = userTasks.filter((t: any) => 
+          t.status === 'done' || t.status === 'DONE'
+        ).length;
+        const completionRate = userTasks.length > 0 
+          ? Math.round((completedTasks / userTasks.length) * 100) 
+          : 0;
+
+        const userProjectIds = new Set(
+          userTasks.map((t: any) => t.projectId).filter(Boolean)
+        );
+        const activeProjects = projectsData.filter((p: any) => 
+          userProjectIds.has(p.id) && (p.status === 'active' || p.status === 'ACTIVE')
+        ).length;
+
+        setStats({
+          activeTasks,
+          workedHours: Math.round(totalHours),
+          completionRate,
+          activeProjects
+        });
+      }
+    } catch (error) {
+      console.error('Error loading employee dashboard:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleTaskClick = (taskId: string) => {
     setSelectedTask(selectedTask === taskId ? null : taskId);
   };
 
-  const handleStartTimer = (taskId: number) => {
+  const handleStartTimer = (taskId: string) => {
     setActiveTimer(activeTimer === taskId ? null : taskId);
   };
 
-  const handleCompleteTask = (taskId: number) => {
-    console.log('Marcar tarefa como concluída:', taskId);
+  const handleCompleteTask = async (taskId: string) => {
+    try {
+      await apiService.changeTaskStatus(taskId, 'done');
+      loadData();
+    } catch (error) {
+      console.error('Error completing task:', error);
+      alert('Erro ao marcar tarefa como concluída');
+    }
   };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-gray-500">Carregando...</div>
+      </div>
+    );
+  }
+
+  const statsData = [
+    { 
+      name: 'Tarefas Ativas', 
+      value: stats.activeTasks.toString(), 
+      change: '+2', 
+      changeType: 'positive', 
+      icon: Target 
+    },
+    { 
+      name: 'Horas Trabalhadas', 
+      value: `${stats.workedHours}h`, 
+      change: '+5h', 
+      changeType: 'positive', 
+      icon: Clock 
+    },
+    { 
+      name: 'Taxa de Conclusão', 
+      value: `${stats.completionRate}%`, 
+      change: '+12%', 
+      changeType: 'positive', 
+      icon: TrendingUp 
+    },
+    { 
+      name: 'Projetos Ativos', 
+      value: stats.activeProjects.toString(), 
+      change: '+1', 
+      changeType: 'positive', 
+      icon: FileText 
+    },
+  ];
+
+  const projectMap = new Map(projects.map((p: any) => [p.id, p.name]));
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -110,7 +195,7 @@ export default function DashboardFuncionario() {
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {stats.map((stat, index) => (
+        {statsData.map((stat, index) => (
           <div key={stat.name} className="stat-card animate-slide-up" style={{ animationDelay: `${index * 0.1}s` }}>
             <div className="flex items-center justify-between">
               <div>
@@ -156,82 +241,105 @@ export default function DashboardFuncionario() {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {mockTasks.map((task) => (
-                    <tr 
-                      key={task.id} 
-                      className={`hover:bg-gray-50 transition-colors cursor-pointer ${selectedTask === task.id ? 'bg-blue-50' : ''}`}
-                      onClick={() => handleTaskClick(task.id)}
-                    >
-                      <td className="px-3 py-3 whitespace-nowrap">
-                        <div>
-                          <div className="text-sm font-medium text-gray-900">{task.title}</div>
-                          <div className="text-sm text-gray-500">Prazo: {new Date(task.dueDate).toLocaleDateString('pt-BR')}</div>
-                        </div>
-                      </td>
-                      <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-900">{task.project}</td>
-                      <td className="px-3 py-3 whitespace-nowrap">
-                        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(task.status)}`}>
-                          {task.status}
-                        </span>
-                      </td>
-                      <td className="px-3 py-3 whitespace-nowrap">
-                        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getPriorityColor(task.priority)}`}>
-                          {task.priority}
-                        </span>
-                      </td>
-                      <td className="px-3 py-3 whitespace-nowrap">
-                        <div className="flex items-center">
-                          <div className="w-16 bg-gray-200 rounded-full h-2 mr-2">
-                            <div 
-                              className="bg-blue-600 h-2 rounded-full" 
-                              style={{ width: `${(task.completedHours / task.estimatedHours) * 100}%` }}
-                            ></div>
+                  {tasks.map((task) => {
+                    const status = taskStatusToLabel(task.status);
+                    const priority = taskPriorityToLabel(task.priority);
+                    const estimatedHours = parseFloat(task.estimatedHours || '0');
+                    const completedHours = parseFloat(task.timeLogged?.totalHours || '0');
+                    const progress = estimatedHours > 0 
+                      ? Math.round((completedHours / estimatedHours) * 100) 
+                      : 0;
+                    
+                    return (
+                      <tr 
+                        key={task.id} 
+                        className={`hover:bg-gray-50 transition-colors cursor-pointer ${selectedTask === task.id ? 'bg-blue-50' : ''}`}
+                        onClick={() => handleTaskClick(task.id)}
+                      >
+                        <td className="px-3 py-3 whitespace-nowrap">
+                          <div>
+                            <div className="text-sm font-medium text-gray-900">{task.title}</div>
+                            <div className="text-sm text-gray-500">
+                              Prazo: {task.dueDate ? new Date(task.dueDate).toLocaleDateString('pt-BR') : '-'}
+                            </div>
                           </div>
-                          <span className="text-sm text-gray-600">{task.completedHours}h/{task.estimatedHours}h</span>
-                        </div>
-                      </td>
-                      <td className="px-3 py-3 whitespace-nowrap">
-                        <div className="flex items-center space-x-1">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleStartTimer(task.id);
-                            }}
-                            className={`p-1 transition-colors ${
-                              activeTimer === task.id 
-                                ? 'text-red-600 hover:text-red-700' 
-                                : 'text-gray-400 hover:text-blue-600'
-                            }`}
-                            title={activeTimer === task.id ? 'Pausar' : 'Iniciar Timer'}
-                          >
-                            {activeTimer === task.id ? <Pause size={14} /> : <Play size={14} />}
-                          </button>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              console.log('Visualizar tarefa:', task.id);
-                            }}
-                            className="p-1 text-gray-400 hover:text-blue-600 transition-colors"
-                            title="Visualizar"
-                          >
-                            <Eye size={14} />
-                          </button>
-                          {task.status !== 'Concluído' && (
+                        </td>
+                        <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-900">
+                          {projectMap.get(task.projectId) || '-'}
+                        </td>
+                        <td className="px-3 py-3 whitespace-nowrap">
+                          <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(status)}`}>
+                            {status}
+                          </span>
+                        </td>
+                        <td className="px-3 py-3 whitespace-nowrap">
+                          <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getPriorityColor(priority)}`}>
+                            {priority}
+                          </span>
+                        </td>
+                        <td className="px-3 py-3 whitespace-nowrap">
+                          <div className="flex items-center">
+                            <div className="w-16 bg-gray-200 rounded-full h-2 mr-2">
+                              <div 
+                                className="bg-blue-600 h-2 rounded-full" 
+                                style={{ width: `${Math.min(progress, 100)}%` }}
+                              ></div>
+                            </div>
+                            <span className="text-sm text-gray-600">
+                              {completedHours.toFixed(1)}h/{estimatedHours.toFixed(1)}h
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-3 py-3 whitespace-nowrap">
+                          <div className="flex items-center space-x-1">
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
-                                handleCompleteTask(task.id);
+                                handleStartTimer(task.id);
                               }}
-                              className="p-1 text-gray-400 hover:text-green-600 transition-colors"
-                              title="Marcar como Concluído"
+                              className={`p-1 transition-colors ${
+                                activeTimer === task.id 
+                                  ? 'text-red-600 hover:text-red-700' 
+                                  : 'text-gray-400 hover:text-blue-600'
+                              }`}
+                              title={activeTimer === task.id ? 'Pausar' : 'Iniciar Timer'}
                             >
-                              <CheckCircle2 size={14} />
+                              {activeTimer === task.id ? <Pause size={14} /> : <Play size={14} />}
                             </button>
-                          )}
-                        </div>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                window.location.href = `/tarefas/${task.id}`;
+                              }}
+                              className="p-1 text-gray-400 hover:text-blue-600 transition-colors"
+                              title="Visualizar"
+                            >
+                              <Eye size={14} />
+                            </button>
+                            {task.status !== 'done' && task.status !== 'DONE' && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleCompleteTask(task.id);
+                                }}
+                                className="p-1 text-gray-400 hover:text-green-600 transition-colors"
+                                title="Marcar como Concluído"
+                              >
+                                <CheckCircle2 size={14} />
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {tasks.length === 0 && (
+                    <tr>
+                      <td colSpan={6} className="px-3 py-8 text-center text-gray-500">
+                        Nenhuma tarefa encontrada
                       </td>
                     </tr>
-                  ))}
+                  )}
                 </tbody>
               </table>
             </div>
@@ -244,12 +352,20 @@ export default function DashboardFuncionario() {
             {activeTimer ? (
               <div className="text-center">
                 <div className="text-3xl font-bold text-blue-600 mb-2">02:34:15</div>
-                <p className="text-sm text-gray-600 mb-4">Tarefa: Criar apresentação do projeto</p>
+                <p className="text-sm text-gray-600 mb-4">
+                  Tarefa: {tasks.find(t => t.id === activeTimer)?.title || '-'}
+                </p>
                 <div className="flex space-x-2">
-                  <button className="btn-primary text-sm px-3 py-1">
+                  <button 
+                    onClick={() => setActiveTimer(null)}
+                    className="btn-primary text-sm px-3 py-1"
+                  >
                     Pausar
                   </button>
-                  <button className="btn-secondary text-sm px-3 py-1">
+                  <button 
+                    onClick={() => setActiveTimer(null)}
+                    className="btn-secondary text-sm px-3 py-1"
+                  >
                     Finalizar
                   </button>
                 </div>
@@ -266,27 +382,53 @@ export default function DashboardFuncionario() {
           <div className="card animate-slide-up delay-400">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">Próximas Tarefas</h3>
             <div className="space-y-3">
-              <div className="flex items-start space-x-3 p-3 bg-red-50 rounded-lg">
-                <AlertCircle className="text-red-500 mt-0.5" size={16} />
-                <div>
-                  <p className="text-sm font-medium text-red-800">Prazo Crítico</p>
-                  <p className="text-xs text-red-600">Criar apresentação - 2 dias</p>
+              {tasks
+                .filter((t: any) => {
+                  if (!t.dueDate) return false;
+                  const daysUntilDue = Math.ceil((new Date(t.dueDate).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
+                  return daysUntilDue > 0 && daysUntilDue <= 7;
+                })
+                .slice(0, 3)
+                .map((task: any) => {
+                  const daysUntilDue = Math.ceil((new Date(task.dueDate).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
+                  const isCritical = daysUntilDue <= 2;
+                  const isWarning = daysUntilDue <= 5;
+                  
+                  return (
+                    <div 
+                      key={task.id} 
+                      className={`flex items-start space-x-3 p-3 rounded-lg ${
+                        isCritical ? 'bg-red-50' : isWarning ? 'bg-yellow-50' : 'bg-blue-50'
+                      }`}
+                    >
+                      <AlertCircle 
+                        className={`mt-0.5 ${isCritical ? 'text-red-500' : isWarning ? 'text-yellow-500' : 'text-blue-500'}`} 
+                        size={16} 
+                      />
+                      <div>
+                        <p className={`text-sm font-medium ${
+                          isCritical ? 'text-red-800' : isWarning ? 'text-yellow-800' : 'text-blue-800'
+                        }`}>
+                          {isCritical ? 'Prazo Crítico' : isWarning ? 'Prazo Próximo' : 'Prazo'}
+                        </p>
+                        <p className={`text-xs ${
+                          isCritical ? 'text-red-600' : isWarning ? 'text-yellow-600' : 'text-blue-600'
+                        }`}>
+                          {task.title} - {daysUntilDue} {daysUntilDue === 1 ? 'dia' : 'dias'}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
+              {tasks.filter((t: any) => {
+                if (!t.dueDate) return false;
+                const daysUntilDue = Math.ceil((new Date(t.dueDate).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
+                return daysUntilDue > 0 && daysUntilDue <= 7;
+              }).length === 0 && (
+                <div className="text-center text-gray-500 text-sm py-4">
+                  Nenhuma tarefa com prazo próximo
                 </div>
-              </div>
-              <div className="flex items-start space-x-3 p-3 bg-yellow-50 rounded-lg">
-                <Clock className="text-yellow-500 mt-0.5" size={16} />
-                <div>
-                  <p className="text-sm font-medium text-yellow-800">Prazo Próximo</p>
-                  <p className="text-xs text-yellow-600">Revisar cronograma - 5 dias</p>
-                </div>
-              </div>
-              <div className="flex items-start space-x-3 p-3 bg-blue-50 rounded-lg">
-                <CheckCircle2 className="text-blue-500 mt-0.5" size={16} />
-                <div>
-                  <p className="text-sm font-medium text-blue-800">Concluído</p>
-                  <p className="text-xs text-blue-600">Preparar material de treinamento</p>
-                </div>
-              </div>
+              )}
             </div>
           </div>
 
@@ -295,15 +437,17 @@ export default function DashboardFuncionario() {
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-sm text-gray-600">Horas Trabalhadas</span>
-                <span className="text-sm font-semibold">32h</span>
+                <span className="text-sm font-semibold">{stats.workedHours}h</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-sm text-gray-600">Tarefas Concluídas</span>
-                <span className="text-sm font-semibold">5</span>
+                <span className="text-sm font-semibold">
+                  {tasks.filter((t: any) => t.status === 'done' || t.status === 'DONE').length}
+                </span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-sm text-gray-600">Produtividade</span>
-                <span className="text-sm font-semibold text-green-600">87%</span>
+                <span className="text-sm font-semibold text-green-600">{stats.completionRate}%</span>
               </div>
             </div>
           </div>

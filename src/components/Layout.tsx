@@ -1,6 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
 import { Outlet, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { usePermission } from '../hooks/usePermission';
+import { useWebSocket } from '../hooks/useWebSocket';
+import apiService from '../services/api';
 import { 
   LayoutDashboard, 
   Calendar, 
@@ -15,14 +18,24 @@ import {
   BarChart3,
   FileText,
   User,
-  CheckSquare
+  CheckSquare,
+  Building2,
+  Truck,
+  FolderKanban,
+  FolderPlus,
+  UserCog,
+  PlusSquare
 } from 'lucide-react';
 
 export default function Layout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [isLoadingNotifications, setIsLoadingNotifications] = useState(false);
   const location = useLocation();
   const { user, logout } = useAuth();
+  const { can } = usePermission(user);
   const notificationsRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -41,63 +54,84 @@ export default function Layout() {
     };
   }, [notificationsOpen]);
 
+  useWebSocket();
+
+  useEffect(() => {
+    const loadNotifications = async () => {
+      try {
+        setIsLoadingNotifications(true);
+        const [notificationsRes, unreadRes] = await Promise.all([
+          apiService.getNotifications(),
+          apiService.getUnreadCount()
+        ]);
+        setNotifications((notificationsRes as any)?.notifications || (notificationsRes as any)?.data?.notifications || []);
+        setUnreadCount((unreadRes as any)?.count || (unreadRes as any)?.data?.count || 0);
+      } catch (error) {
+        console.error('Error loading notifications:', error);
+      } finally {
+        setIsLoadingNotifications(false);
+      }
+    };
+
+    if (user) {
+      loadNotifications();
+
+      const handleWebSocketNotification = (event: CustomEvent) => {
+        const notification = event.detail;
+        if (notification) {
+          setNotifications(prev => [notification, ...prev]);
+          if (!notification.isRead) {
+            setUnreadCount(prev => prev + 1);
+          }
+        }
+        loadNotifications();
+      };
+
+      window.addEventListener('websocket:notification', handleWebSocketNotification as EventListener);
+
+      const fallbackInterval = setInterval(loadNotifications, 60000);
+
+      return () => {
+        clearInterval(fallbackInterval);
+        window.removeEventListener('websocket:notification', handleWebSocketNotification as EventListener);
+      };
+    }
+  }, [user]);
+
   const allNavigation = [
-    { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, permission: 'dashboard' },
-    { name: 'Cronograma', href: '/cronograma', icon: Calendar, permission: 'cronograma' },
-    { name: 'Tarefas', href: '/tarefas', icon: CheckSquare, permission: 'tarefas' },
-    { name: 'Financeiro', href: '/financeiro', icon: DollarSign, permission: 'financeiro' },
-    { name: 'Administrativo', href: '/administrativo', icon: Users, permission: 'administrativo' },
-    { name: 'Relatórios', href: '/relatorios', icon: BarChart3, permission: 'relatorios' },
-    { name: 'Templates', href: '/templates', icon: FileText, permission: 'templates' },
-    { name: 'Notificações', href: '/notificacoes', icon: Bell, permission: 'notificacoes' },
-    { name: 'Perfil', href: '/perfil', icon: User, permission: 'perfil' },
-    { name: 'Configurações', href: '/configuracoes', icon: Settings, permission: 'configuracoes' },
+    { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, permission: 'projects:read', alwaysVisible: true },
+    { name: 'Projetos', href: '/projetos', icon: FolderKanban, permission: 'projects:read' },
+    { name: 'Criar Novo Projeto', href: '/projetos/novo', icon: FolderPlus, permission: 'projects:create' },
+    { name: 'Cronograma', href: '/cronograma', icon: Calendar, permission: 'projects:read' },
+    { name: 'Tarefas', href: '/tarefas', icon: CheckSquare, permission: 'tasks:read' },
+    { name: 'Criar Nova Tarefa', href: '/tarefas/nova', icon: PlusSquare, permission: 'tasks:create' },
+    { name: 'Clientes', href: '/clientes', icon: Building2, permission: 'clients:read' },
+    { name: 'Fornecedores', href: '/fornecedores', icon: Truck, permission: 'suppliers:read' },
+    { name: 'Financeiro', href: '/financeiro', icon: DollarSign, permission: 'finance:read' },
+    { name: 'Equipe', href: '/equipe', icon: UserCog, permission: 'team:read' },
+    { name: 'Administrativo', href: '/administrativo', icon: Users, permission: 'administrative:read' },
+    { name: 'Relatórios', href: '/relatorios', icon: BarChart3, permission: 'reports:read' },
+    { name: 'Templates', href: '/templates', icon: FileText, permission: 'projects:read' },
+    { name: 'Notificações', href: '/notificacoes', icon: Bell, permission: 'tasks:read', alwaysVisible: true },
+    { name: 'Perfil', href: '/perfil', icon: User, permission: 'profile:read', alwaysVisible: true },
+    { name: 'Configurações', href: '/configuracoes', icon: Settings, permission: 'profile:read', alwaysVisible: true },
   ];
 
   const navigation = allNavigation.filter(item => 
-    user?.permissions?.includes('all') || user?.permissions?.includes(item.permission)
+    item.alwaysVisible || can(item.permission) || user?.permissions?.includes('all')
   );
 
-  const mockNotifications = [
-    {
-      id: 1,
-      type: 'deadline',
-      title: 'Prazo próximo',
-      message: 'O projeto "Evento Corporativo Q1" tem prazo de entrega em 3 dias',
-      time: '2 horas atrás',
-      isRead: false,
-      priority: 'high'
-    },
-    {
-      id: 2,
-      type: 'project_update',
-      title: 'Projeto atualizado',
-      message: 'Maria Silva atualizou o status do projeto "Lançamento Produto"',
-      time: '4 horas atrás',
-      isRead: false,
-      priority: 'medium'
-    },
-    {
-      id: 3,
-      type: 'team_mention',
-      title: 'Você foi mencionado',
-      message: 'João Santos mencionou você em uma tarefa do projeto "Workshop Digital"',
-      time: '1 dia atrás',
-      isRead: true,
-      priority: 'medium'
-    },
-    {
-      id: 4,
-      type: 'financial',
-      title: 'Alerta financeiro',
-      message: 'O projeto "Conferência Anual" está próximo do limite de orçamento',
-      time: '2 dias atrás',
-      isRead: true,
-      priority: 'high'
+  const handleMarkAsRead = async (notificationId: string) => {
+    try {
+      await apiService.markNotificationAsRead(notificationId);
+      setNotifications(notifications.map(n => 
+        n.id === notificationId ? { ...n, isRead: true } : n
+      ));
+      setUnreadCount(Math.max(0, unreadCount - 1));
+    } catch (error) {
+      console.error('Error marking notification as read:', error);
     }
-  ];
-
-  const unreadCount = mockNotifications.filter(n => !n.isRead).length;
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -112,7 +146,7 @@ export default function Layout() {
             </div>
             <button
               onClick={() => setSidebarOpen(false)}
-              className="lg:hidden text-gray-500 hover:text-gray-700"
+              className="lg:hidden text-gray-500 hover:text-gray-700 touch-friendly"
             >
               <X size={24} />
             </button>
@@ -134,7 +168,7 @@ export default function Layout() {
           </nav>
 
           <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-gray-200">
-            <button onClick={logout} className="sidebar-item w-full">
+            <button onClick={logout} className="sidebar-item w-full button-press">
               <LogOut className="mr-3 text-gray-400" size={20} />
               Sair
             </button>
@@ -146,7 +180,7 @@ export default function Layout() {
             <div className="flex items-center justify-between h-16 px-2 sm:px-4 lg:px-8">
               <button
                 onClick={() => setSidebarOpen(true)}
-                className="lg:hidden text-gray-500 hover:text-gray-700 p-2"
+                className="lg:hidden text-gray-500 hover:text-gray-700 p-2 touch-friendly button-press"
               >
                 <Menu size={20} />
               </button>
@@ -157,7 +191,7 @@ export default function Layout() {
                   <input
                     type="text"
                     placeholder="Buscar..."
-                    className="w-full pl-10 pr-4 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="input-field w-full pl-10 pr-4 py-2 text-sm"
                   />
                 </div>
               </div>
@@ -166,22 +200,22 @@ export default function Layout() {
                 <div className="relative" ref={notificationsRef}>
                   <button 
                     onClick={() => setNotificationsOpen(!notificationsOpen)}
-                    className="relative text-gray-500 hover:text-gray-700 p-1 transition-colors"
+                    className="relative text-gray-500 hover:text-gray-700 p-1 transition-colors touch-friendly button-press"
                   >
                     <Bell size={20} />
                     {unreadCount > 0 && (
-                      <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full"></span>
+                      <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
                     )}
                   </button>
                   
                   {notificationsOpen && (
-                    <div className="absolute right-0 mt-2 w-80 bg-white rounded-lg shadow-lg border border-gray-200 z-50">
+                    <div className="absolute right-0 mt-2 w-80 bg-white rounded-lg shadow-lg border border-gray-200 z-50 animate-slide-down">
                       <div className="p-4 border-b border-gray-200">
                         <div className="flex items-center justify-between">
                           <h3 className="text-lg font-semibold text-gray-900">Notificações</h3>
                           <button
                             onClick={() => setNotificationsOpen(false)}
-                            className="text-gray-400 hover:text-gray-600"
+                            className="text-gray-400 hover:text-gray-600 touch-friendly button-press"
                           >
                             <X size={16} />
                           </button>
@@ -194,16 +228,22 @@ export default function Layout() {
                       </div>
                       
                       <div className="max-h-96 overflow-y-auto">
-                        {mockNotifications.length === 0 ? (
+                        {isLoadingNotifications ? (
+                          <div className="p-4 text-center text-gray-500">
+                            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500 mx-auto"></div>
+                            <p className="mt-2">Carregando...</p>
+                          </div>
+                        ) : notifications.length === 0 ? (
                           <div className="p-4 text-center text-gray-500">
                             <Bell size={24} className="mx-auto mb-2 text-gray-300" />
                             <p>Nenhuma notificação</p>
                           </div>
                         ) : (
-                          mockNotifications.map((notification) => (
+                          notifications.map((notification) => (
                             <div
                               key={notification.id}
-                              className={`p-4 border-b border-gray-100 hover:bg-gray-50 transition-colors ${
+                              onClick={() => !notification.isRead && handleMarkAsRead(notification.id)}
+                              className={`p-4 border-b border-gray-100 hover:bg-gray-50 transition-colors cursor-pointer ${
                                 !notification.isRead ? 'bg-blue-50' : ''
                               }`}
                             >
@@ -214,13 +254,13 @@ export default function Layout() {
                                 }`}></div>
                                 <div className="flex-1 min-w-0">
                                   <p className="text-sm font-medium text-gray-900">
-                                    {notification.title}
+                                    {notification.title || notification.type}
                                   </p>
                                   <p className="text-sm text-gray-600 mt-1">
-                                    {notification.message}
+                                    {notification.message || notification.content || notification.data?.message}
                                   </p>
                                   <p className="text-xs text-gray-500 mt-2">
-                                    {notification.time}
+                                    {notification.createdAt ? new Date(notification.createdAt).toLocaleString('pt-BR') : ''}
                                   </p>
                                 </div>
                                 {!notification.isRead && (
@@ -248,12 +288,12 @@ export default function Layout() {
                 <div className="flex items-center space-x-2">
                   <div className="w-7 h-7 sm:w-8 sm:h-8 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-full flex items-center justify-center">
                     <span className="text-white font-semibold text-xs sm:text-sm">
-                      {user?.name?.split(' ').map(n => n[0]).join('') || 'U'}
+                      {user?.firstName?.[0] || ''}{user?.lastName?.[0] || 'U'}
                     </span>
                   </div>
                   <div className="hidden sm:block">
                     <p className="text-xs sm:text-sm font-medium text-gray-900 truncate max-w-20 sm:max-w-none">
-                      {user?.name || 'Usuário'}
+                      {user?.firstName && user?.lastName ? `${user.firstName} ${user.lastName}` : user?.email || 'Usuário'}
                     </p>
                     <p className="text-xs text-gray-500 truncate max-w-20 sm:max-w-none">
                       {user?.role || 'Usuário'}

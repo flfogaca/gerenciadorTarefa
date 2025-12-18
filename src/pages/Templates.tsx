@@ -1,15 +1,14 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import apiService from '../services/api';
+import { showToast, showConfirm } from '../utils/toast';
 import { 
   FileText, 
   Plus, 
   Copy, 
-  Edit, 
   Trash2, 
-  Eye, 
-  Download,
   Upload,
   Search,
-  Filter,
   Calendar,
   Users,
   Clock,
@@ -18,114 +17,82 @@ import {
   Tag
 } from 'lucide-react';
 
-const mockTemplates = [
-  {
-    id: 1,
-    name: 'Evento Corporativo',
-    description: 'Template completo para eventos corporativos com todas as etapas necessárias',
-    category: 'Eventos',
-    duration: 45,
-    phasesCount: 6,
-    tasks: 24,
-    teamSize: 8,
-    isDefault: true,
-    isPublic: true,
-    createdAt: '2024-01-15',
-    lastUsed: '2025-01-20',
-    usageCount: 12,
-    rating: 4.8,
-    tags: ['evento', 'corporativo', 'planejamento'],
-    phases: [
-      { name: 'Negócios', tasks: 4, duration: 7 },
-      { name: 'Gestão de Projeto', tasks: 3, duration: 5 },
-      { name: 'Planejamento', tasks: 5, duration: 10 },
-      { name: 'Criação', tasks: 6, duration: 15 },
-      { name: 'Produção', tasks: 4, duration: 5 },
-      { name: 'Arquitetura', tasks: 2, duration: 3 }
-    ]
-  },
-  {
-    id: 2,
-    name: 'Lançamento de Produto',
-    description: 'Template para lançamento de produtos com foco em marketing e comunicação',
-    category: 'Marketing',
-    duration: 30,
-    phasesCount: 5,
-    tasks: 18,
-    teamSize: 6,
-    isDefault: false,
-    isPublic: true,
-    createdAt: '2024-02-10',
-    lastUsed: '2025-01-18',
-    usageCount: 8,
-    rating: 4.6,
-    tags: ['produto', 'lançamento', 'marketing'],
-    phases: [
-      { name: 'Pesquisa', tasks: 3, duration: 5 },
-      { name: 'Desenvolvimento', tasks: 4, duration: 8 },
-      { name: 'Marketing', tasks: 5, duration: 10 },
-      { name: 'Lançamento', tasks: 4, duration: 5 },
-      { name: 'Pós-lançamento', tasks: 2, duration: 2 }
-    ]
-  },
-  {
-    id: 3,
-    name: 'Workshop Digital',
-    description: 'Template para workshops e treinamentos online',
-    category: 'Educação',
-    duration: 15,
-    phasesCount: 4,
-    tasks: 12,
-    teamSize: 4,
-    isDefault: false,
-    isPublic: false,
-    createdAt: '2024-03-05',
-    lastUsed: '2025-01-15',
-    usageCount: 5,
-    rating: 4.4,
-    tags: ['workshop', 'digital', 'treinamento'],
-    phases: [
-      { name: 'Planejamento', tasks: 3, duration: 3 },
-      { name: 'Preparação', tasks: 4, duration: 5 },
-      { name: 'Execução', tasks: 3, duration: 5 },
-      { name: 'Follow-up', tasks: 2, duration: 2 }
-    ]
-  },
-  {
-    id: 4,
-    name: 'Conferência Anual',
-    description: 'Template para conferências e eventos de grande porte',
-    category: 'Eventos',
-    duration: 90,
-    phasesCount: 8,
-    tasks: 35,
-    teamSize: 12,
-    isDefault: false,
-    isPublic: true,
-    createdAt: '2024-01-20',
-    lastUsed: '2024-12-10',
-    usageCount: 3,
-    rating: 4.9,
-    tags: ['conferência', 'grande porte', 'evento'],
-    phases: [
-      { name: 'Concepção', tasks: 4, duration: 10 },
-      { name: 'Planejamento', tasks: 6, duration: 15 },
-      { name: 'Desenvolvimento', tasks: 8, duration: 20 },
-      { name: 'Marketing', tasks: 5, duration: 15 },
-      { name: 'Produção', tasks: 6, duration: 15 },
-      { name: 'Execução', tasks: 4, duration: 10 },
-      { name: 'Pós-evento', tasks: 2, duration: 5 }
-    ]
-  }
-];
+interface Template {
+  id: string;
+  templateId: string;
+  name: string;
+  description: string;
+  category: string;
+  duration?: number;
+  phasesCount?: number;
+  tasks?: number | any[];
+  teamSize?: number;
+  isDefault: boolean;
+  isPublic: boolean;
+  createdAt: string;
+  lastUsedAt?: string | null;
+  usageCount: number;
+  rating: number;
+  tags: string[];
+  phases?: Array<{ name: string; tasks: number; duration: number }> | any[];
+}
 
 const categories = ['Todos', 'Eventos', 'Marketing', 'Educação', 'Tecnologia', 'Consultoria'];
 
 export default function Templates() {
+  const navigate = useNavigate();
   const [selectedCategory, setSelectedCategory] = useState('Todos');
   const [searchTerm, setSearchTerm] = useState('');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
-  const [templates, setTemplates] = useState(mockTemplates);
+  const [templates, setTemplates] = useState<Template[]>([]);
+
+  useEffect(() => {
+    loadTemplates();
+  }, []);
+
+  const loadTemplates = async () => {
+    try {
+      const filters: any = {};
+      if (selectedCategory !== 'Todos') {
+        filters.category = selectedCategory;
+      }
+      if (searchTerm) {
+        filters.search = searchTerm;
+      }
+      
+      const response = await apiService.getTemplates(filters);
+      const templatesData = (response as any)?.data?.templates || (response as any)?.data || [];
+      
+      const mappedTemplates = templatesData.map((t: any) => ({
+        id: t.id,
+        templateId: t.templateId,
+        name: t.name,
+        description: t.description || '',
+        category: t.category,
+        duration: t.phases?.reduce((sum: number, p: any) => sum + (p.duration || 0), 0) || 0,
+        phasesCount: t.phases?.length || 0,
+        tasks: Array.isArray(t.tasks) ? t.tasks.length : (t.tasks || 0),
+        teamSize: 0,
+        isDefault: t.isDefault || false,
+        isPublic: t.isPublic || false,
+        createdAt: t.createdAt || new Date().toISOString(),
+        lastUsedAt: t.lastUsedAt,
+        usageCount: t.usageCount || 0,
+        rating: t.rating || 0,
+        tags: t.tags || [],
+        phases: t.phases || []
+      }));
+      
+      setTemplates(mappedTemplates);
+    } catch (error) {
+      console.error('Error loading templates:', error);
+      setTemplates([]);
+    }
+  };
+
+  useEffect(() => {
+    loadTemplates();
+  }, [selectedCategory, searchTerm]);
 
   const filteredTemplates = templates.filter(template => {
     const matchesCategory = selectedCategory === 'Todos' || template.category === selectedCategory;
@@ -135,31 +102,66 @@ export default function Templates() {
     return matchesCategory && matchesSearch;
   });
 
-  const handleUseTemplate = (templateId: number) => {
-    setTemplates(templates.map(t => 
-      t.id === templateId 
-        ? { ...t, usageCount: t.usageCount + 1, lastUsed: new Date().toISOString().split('T')[0] }
-        : t
-    ));
-  };
-
-  const handleDuplicateTemplate = (templateId: number) => {
-    const template = templates.find(t => t.id === templateId);
-    if (template) {
-      const newTemplate = {
-        ...template,
-        id: Math.max(...templates.map(t => t.id)) + 1,
-        name: `${template.name} (Cópia)`,
-        isDefault: false,
-        usageCount: 0,
-        createdAt: new Date().toISOString().split('T')[0]
-      };
-      setTemplates([...templates, newTemplate]);
+  const handleUseTemplate = async (templateId: string) => {
+    try {
+      const template = templates.find(t => t.templateId === templateId || t.id === templateId);
+      if (!template) {
+        showToast.error('Template não encontrado');
+        return;
+      }
+      
+      navigate('/projetos/novo', { state: { templateId: template.templateId || template.id } });
+    } catch (error) {
+      console.error('Error using template:', error);
+      showToast.error('Erro ao usar template');
     }
   };
 
-  const handleDeleteTemplate = (templateId: number) => {
-    setTemplates(templates.filter(t => t.id !== templateId));
+  const handleDuplicateTemplate = async (templateId: string) => {
+    try {
+      const template = templates.find(t => t.templateId === templateId || t.id === templateId);
+      if (!template) {
+        showToast.error('Template não encontrado');
+        return;
+      }
+
+      const newTemplateData = {
+        name: `${template.name} (Cópia)`,
+        description: template.description,
+        category: template.category,
+        phases: template.phases || [],
+        tasks: Array.isArray(template.tasks) ? template.tasks : [],
+        isPublic: false,
+        tags: template.tags || []
+      };
+
+      await apiService.createTemplate(newTemplateData);
+      await loadTemplates();
+      showToast.success('Template duplicado com sucesso!');
+    } catch (error) {
+      console.error('Error duplicating template:', error);
+      showToast.error('Erro ao duplicar template');
+    }
+  };
+
+  const handleDeleteTemplate = async (templateId: string) => {
+    const confirmed = await showConfirm('Tem certeza que deseja excluir este template?');
+    if (!confirmed) return;
+    
+    try {
+      const template = templates.find(t => t.templateId === templateId || t.id === templateId);
+      if (!template) {
+        showToast.error('Template não encontrado');
+        return;
+      }
+
+      await apiService.deleteTemplate(template.templateId || template.id);
+      await loadTemplates();
+      showToast.success('Template excluído com sucesso!');
+    } catch (error) {
+      console.error('Error deleting template:', error);
+      showToast.error('Erro ao excluir template');
+    }
   };
 
   return (
@@ -174,7 +176,10 @@ export default function Templates() {
             <Upload size={20} className="mr-2" />
             Importar
           </button>
-          <button className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center">
+          <button 
+            onClick={() => navigate('/projetos/novo')}
+            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center"
+          >
             <Plus size={20} className="mr-2" />
             Novo Template
           </button>
@@ -301,32 +306,33 @@ export default function Templates() {
 
                   <div className="flex items-center space-x-2">
                     <button
-                      onClick={() => handleUseTemplate(template.id)}
+                      onClick={() => handleUseTemplate(template.templateId || template.id)}
                       className="flex-1 bg-blue-600 text-white px-3 py-2 rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
                     >
                       Usar Template
                     </button>
-                    <button className="p-2 text-gray-400 hover:text-gray-600 transition-colors">
-                      <Eye size={16} />
-                    </button>
                     <button
-                      onClick={() => handleDuplicateTemplate(template.id)}
+                      onClick={() => handleDuplicateTemplate(template.templateId || template.id)}
                       className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
+                      title="Duplicar"
                     >
                       <Copy size={16} />
                     </button>
-                    <button className="p-2 text-gray-400 hover:text-gray-600 transition-colors">
-                      <Edit size={16} />
-                    </button>
                     <button
-                      onClick={() => handleDeleteTemplate(template.id)}
+                      onClick={() => handleDeleteTemplate(template.templateId || template.id)}
                       className="p-2 text-gray-400 hover:text-red-600 transition-colors"
+                      title="Excluir"
                     >
                       <Trash2 size={16} />
                     </button>
                   </div>
                 </div>
               ))}
+              {filteredTemplates.length === 0 && (
+                <div className="col-span-full text-center py-12 text-gray-500">
+                  Nenhum template encontrado
+                </div>
+              )}
             </div>
           ) : (
             <div className="space-y-4">
@@ -375,36 +381,34 @@ export default function Templates() {
                             <Users className="mr-1" size={14} />
                             {template.usageCount} usos
                           </div>
-                          <div className="flex items-center">
-                            <Clock className="mr-1" size={14} />
-                            Último uso: {new Date(template.lastUsed).toLocaleDateString('pt-BR')}
-                          </div>
+                          {template.lastUsedAt && (
+                            <div className="flex items-center">
+                              <Clock className="mr-1" size={14} />
+                              Último uso: {new Date(template.lastUsedAt).toLocaleDateString('pt-BR')}
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>
                     
                     <div className="flex items-center space-x-2 ml-4">
                       <button
-                        onClick={() => handleUseTemplate(template.id)}
+                        onClick={() => handleUseTemplate(template.templateId || template.id)}
                         className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
                       >
                         Usar Template
                       </button>
-                      <button className="p-2 text-gray-400 hover:text-gray-600 transition-colors">
-                        <Eye size={16} />
-                      </button>
                       <button
-                        onClick={() => handleDuplicateTemplate(template.id)}
+                        onClick={() => handleDuplicateTemplate(template.templateId || template.id)}
                         className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
+                        title="Duplicar"
                       >
                         <Copy size={16} />
                       </button>
-                      <button className="p-2 text-gray-400 hover:text-gray-600 transition-colors">
-                        <Edit size={16} />
-                      </button>
                       <button
-                        onClick={() => handleDeleteTemplate(template.id)}
+                        onClick={() => handleDeleteTemplate(template.templateId || template.id)}
                         className="p-2 text-gray-400 hover:text-red-600 transition-colors"
+                        title="Excluir"
                       >
                         <Trash2 size={16} />
                       </button>
@@ -412,6 +416,11 @@ export default function Templates() {
                   </div>
                 </div>
               ))}
+              {filteredTemplates.length === 0 && (
+                <div className="text-center py-12 text-gray-500">
+                  Nenhum template encontrado
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -443,7 +452,7 @@ export default function Templates() {
         <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">Por Categoria</h3>
           <div className="space-y-3">
-            {categories.slice(1).map((category, index) => (
+            {categories.slice(1).map((category) => (
               <div key={category} className="flex items-center justify-between">
                 <span className="text-sm text-gray-600">{category}</span>
                 <span className="text-sm font-medium text-gray-900">
@@ -472,7 +481,9 @@ export default function Templates() {
             <div className="flex items-center justify-between">
               <span className="text-sm text-gray-600">Avaliação Média</span>
               <span className="text-sm font-medium text-gray-900">
-                {(templates.reduce((sum, t) => sum + t.rating, 0) / templates.length).toFixed(1)}
+                {templates.length > 0 
+                  ? (templates.reduce((sum, t) => sum + t.rating, 0) / templates.length).toFixed(1)
+                  : '0.0'}
               </span>
             </div>
           </div>

@@ -1,0 +1,559 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Schema Multi-tenant com isolamento por tenant
+model Tenant {
+  id        String   @id @default(cuid())
+  tenantId  String   @unique
+  name      String
+  domain    String   @unique
+  settings  Json
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relacionamentos
+  users                User[]
+  projects             Project[]
+  tasks                Task[]
+  clients              Client[]
+  suppliers            Supplier[]
+  reports              Report[]
+  auditLogs            AuditLog[]
+  notifications        Notification[]
+  expenses             Expense[]
+  invoices             Invoice[]
+  payments             Payment[]
+  financialTransactions FinancialTransaction[]
+  templates            Template[]
+  userSettings         UserSettings[]
+  tenantSettings       TenantSettings?
+
+  @@map("tenants")
+}
+
+model User {
+  id          String   @id @default(cuid())
+  userId      String   @unique
+  tenantId    String
+  email       String
+  password    String
+  firstName   String
+  lastName    String
+  role        UserRole
+  profile     Json
+  permissions Json     @default("[]")
+  isActive    Boolean  @default(true)
+  lastLoginAt DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relacionamentos
+  tenant           Tenant        @relation(fields: [tenantId], references: [tenantId], onDelete: Cascade)
+  assignedTasks    Task[]        @relation("TaskAssignee")
+  reportedTasks    Task[]        @relation("TaskReporter")
+  managedProjects  Project[]     @relation("ProjectManager")
+  projectMembers   ProjectMember[]
+  taskComments     TaskComment[]
+  taskTimeEntries  TaskTimeEntry[]
+  auditLogs        AuditLog[]
+  notifications    Notification[]
+  createdTemplates Template[]
+  userSettings     UserSettings?
+
+  @@unique([email, tenantId])
+  @@map("users")
+}
+
+model Client {
+  id          String   @id @default(cuid())
+  tenantId    String
+  name        String
+  cnpj        String?
+  email       String?
+  phone       String?
+  address     Json?
+  settings    Json     @default("{}")
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relacionamentos
+  tenant   Tenant    @relation(fields: [tenantId], references: [tenantId], onDelete: Cascade)
+  projects Project[]
+  invoices Invoice[]
+
+  @@map("clients")
+}
+
+model Supplier {
+  id          String   @id @default(cuid())
+  tenantId    String
+  name        String
+  cnpj        String?
+  email       String?
+  phone       String?
+  address     Json?
+  services    String[]
+  settings    Json     @default("{}")
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relacionamentos
+  tenant   Tenant    @relation(fields: [tenantId], references: [tenantId], onDelete: Cascade)
+  expenses Expense[]
+  invoices Invoice[]
+
+  @@map("suppliers")
+}
+
+model Project {
+  id          String        @id @default(cuid())
+  projectId   String        @unique
+  tenantId    String
+  name        String
+  description String?
+  clientId    String
+  managerId   String
+  status      ProjectStatus @default(planning)
+  budget      Json
+  timeline    Json
+  team        Json          @default("{\"members\":[],\"roles\":[]}")
+  settings    Json          @default("{}")
+  isActive    Boolean       @default(true)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  // Relacionamentos
+  tenant         Tenant           @relation(fields: [tenantId], references: [tenantId], onDelete: Cascade)
+  client         Client           @relation(fields: [clientId], references: [id])
+  manager        User             @relation("ProjectManager", fields: [managerId], references: [userId])
+  tasks          Task[]
+  members        ProjectMember[]
+  reports        Report[]
+  expenses       Expense[]
+  invoices       Invoice[]
+
+  @@map("projects")
+}
+
+model ProjectMember {
+  id        String   @id @default(cuid())
+  projectId String
+  userId    String
+  role      String
+  joinedAt  DateTime @default(now())
+  permissions Json   @default("[]")
+
+  // Relacionamentos
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [userId], onDelete: Cascade)
+
+  @@unique([projectId, userId])
+  @@map("project_members")
+}
+
+model Task {
+  id             String      @id @default(cuid())
+  taskId         String       @unique
+  tenantId       String
+  projectId      String
+  title          String
+  description    String?
+  assigneeId     String
+  reporterId     String
+  status         TaskStatus   @default(todo)
+  priority       TaskPriority @default(medium)
+  dueDate        DateTime?
+  estimatedHours Float       @default(0)
+  completedHours Float       @default(0)
+  tags           Json        @default("[]")
+  attachments    Json        @default("[]")
+  watchers       Json        @default("[]")
+  subtasks       Json        @default("[]")
+  timeTracking   Json        @default("{\"entries\":[],\"totalTime\":0}")
+  isActive       Boolean     @default(true)
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  // Relacionamentos
+  tenant      Tenant           @relation(fields: [tenantId], references: [tenantId], onDelete: Cascade)
+  project     Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  assignee    User             @relation("TaskAssignee", fields: [assigneeId], references: [userId])
+  reporter    User             @relation("TaskReporter", fields: [reporterId], references: [userId])
+  comments    TaskComment[]
+  timeEntries TaskTimeEntry[]
+
+  @@map("tasks")
+}
+
+model TaskComment {
+  id        String   @id @default(cuid())
+  taskId    String
+  userId    String
+  content   String
+  isEdited  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relacionamentos
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [userId], onDelete: Cascade)
+
+  @@map("task_comments")
+}
+
+model TaskTimeEntry {
+  id          String   @id @default(cuid())
+  taskId      String
+  userId      String
+  duration    Float
+  description String?
+  loggedAt    DateTime @default(now())
+
+  // Relacionamentos
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [userId], onDelete: Cascade)
+
+  @@map("task_time_entries")
+}
+
+model Report {
+  id        String   @id @default(cuid())
+  tenantId  String
+  projectId String?
+  name      String
+  type      String
+  data      Json
+  filters   Json     @default("{}")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relacionamentos
+  tenant  Tenant   @relation(fields: [tenantId], references: [tenantId], onDelete: Cascade)
+  project Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("reports")
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  tenantId  String?
+  userId    String
+  action    String
+  resource  String
+  resourceId String?
+  details   Json
+  ipAddress String?
+  userAgent String?
+  metadata  Json?    @default("{}")
+  createdAt DateTime @default(now())
+
+  // Relacionamentos
+  tenant Tenant? @relation(fields: [tenantId], references: [tenantId], onDelete: Cascade)
+  user   User    @relation(fields: [userId], references: [userId], onDelete: Cascade)
+
+  @@map("audit_logs")
+}
+
+model Notification {
+  id          String   @id @default(cuid())
+  tenantId    String?
+  userId      String?
+  type        String
+  title       String?
+  message     String?
+  data        Json?
+  channel     String   @default("in_app")
+  status      String   @default("pending")
+  priority    String   @default("normal")
+  readAt      DateTime?
+  sentAt      DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenant Tenant? @relation(fields: [tenantId], references: [tenantId], onDelete: Cascade)
+  user   User?   @relation(fields: [userId], references: [userId], onDelete: Cascade)
+
+  @@index([tenantId, userId])
+  @@index([status])
+  @@map("notifications")
+}
+
+model Expense {
+  id            String        @id @default(cuid())
+  expenseId     String        @unique
+  tenantId      String
+  projectId     String?
+  supplierId    String?
+  category      String
+  description   String
+  amount        Float
+  currency      String        @default("BRL")
+  date          DateTime
+  invoiceNumber String?
+  status        ExpenseStatus @default(pending)
+  approvedBy    String?
+  approvedAt    DateTime?
+  notes         String?
+  attachments   Json          @default("[]")
+  metadata      Json          @default("{}")
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  tenant   Tenant    @relation(fields: [tenantId], references: [tenantId], onDelete: Cascade)
+  project  Project?  @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  supplier Supplier? @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  payments Payment[]
+
+  @@index([tenantId, projectId])
+  @@index([tenantId, status])
+  @@index([tenantId, date])
+  @@map("expenses")
+}
+
+model Invoice {
+  id            String        @id @default(cuid())
+  invoiceId     String        @unique
+  tenantId      String
+  projectId     String?
+  clientId      String?
+  supplierId    String?
+  invoiceNumber String
+  type          InvoiceType
+  amount        Float
+  tax           Float         @default(0)
+  total         Float
+  currency      String        @default("BRL")
+  issueDate     DateTime
+  dueDate       DateTime?
+  paymentDate   DateTime?
+  status        InvoiceStatus @default(draft)
+  fileUrl       String?
+  metadata      Json          @default("{}")
+  notes         String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  tenant   Tenant    @relation(fields: [tenantId], references: [tenantId], onDelete: Cascade)
+  project  Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  client   Client?   @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  supplier Supplier? @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  payments Payment[]
+
+  @@index([tenantId, projectId])
+  @@index([tenantId, status])
+  @@index([tenantId, dueDate])
+  @@map("invoices")
+}
+
+model Payment {
+  id            String        @id @default(cuid())
+  paymentId     String        @unique
+  tenantId      String
+  invoiceId     String?
+  expenseId     String?
+  amount        Float
+  currency      String        @default("BRL")
+  method        PaymentMethod
+  paymentDate   DateTime
+  dueDate       DateTime?
+  status        PaymentStatus @default(pending)
+  transactionId String?
+  notes         String?
+  metadata      Json          @default("{}")
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  tenant   Tenant    @relation(fields: [tenantId], references: [tenantId], onDelete: Cascade)
+  invoice  Invoice?  @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+  expense  Expense?  @relation(fields: [expenseId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, invoiceId])
+  @@index([tenantId, expenseId])
+  @@index([tenantId, status])
+  @@index([tenantId, paymentDate])
+  @@map("payments")
+}
+
+model FinancialTransaction {
+  id              String                 @id @default(cuid())
+  transactionId   String                 @unique
+  tenantId        String
+  type            TransactionType
+  amount          Float
+  currency        String                 @default("BRL")
+  category        String
+  description     String
+  relatedEntity   String?
+  relatedEntityId String?
+  date            DateTime
+  reconciled      Boolean                 @default(false)
+  reconciledAt    DateTime?
+  metadata        Json                   @default("{}")
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [tenantId], onDelete: Cascade)
+
+  @@index([tenantId, type])
+  @@index([tenantId, date])
+  @@index([tenantId, reconciled])
+  @@map("financial_transactions")
+}
+
+enum UserRole {
+  super_admin
+  tenant_admin
+  manager
+  employee
+  client
+}
+
+enum ProjectStatus {
+  planning
+  active
+  on_hold
+  completed
+  cancelled
+}
+
+enum TaskStatus {
+  todo
+  in_progress
+  review
+  done
+  cancelled
+}
+
+enum TaskPriority {
+  low
+  medium
+  high
+  urgent
+}
+
+enum ExpenseStatus {
+  pending
+  approved
+  rejected
+  paid
+  cancelled
+}
+
+enum InvoiceType {
+  income
+  expense
+}
+
+enum InvoiceStatus {
+  draft
+  sent
+  paid
+  overdue
+  cancelled
+}
+
+enum PaymentMethod {
+  bank_transfer
+  credit_card
+  debit_card
+  cash
+  check
+  pix
+  other
+}
+
+enum PaymentStatus {
+  pending
+  processing
+  completed
+  failed
+  refunded
+  cancelled
+}
+
+enum TransactionType {
+  income
+  expense
+  transfer
+}
+
+model Template {
+  id          String   @id @default(cuid())
+  templateId  String   @unique
+  tenantId    String
+  name        String
+  description String?
+  category    String
+  isDefault   Boolean  @default(false)
+  isPublic    Boolean  @default(false)
+  createdBy   String
+  phases      Json     @default("[]")
+  tasks       Json     @default("[]")
+  settings    Json     @default("{}")
+  metadata    Json     @default("{}")
+  usageCount  Int      @default(0)
+  lastUsedAt  DateTime?
+  rating      Float    @default(0)
+  tags        String[]
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [tenantId], onDelete: Cascade)
+  creator User  @relation(fields: [createdBy], references: [userId], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([category])
+  @@index([isPublic])
+  @@map("templates")
+}
+
+model UserSettings {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  tenantId  String
+  settings  Json     @default("{}")
+  preferences Json   @default("{}")
+  notifications Json  @default("{}")
+  theme     String   @default("light")
+  language  String   @default("pt-BR")
+  timezone  String   @default("America/Sao_Paulo")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user   User   @relation(fields: [userId], references: [userId], onDelete: Cascade)
+  tenant Tenant @relation(fields: [tenantId], references: [tenantId], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([tenantId])
+  @@map("user_settings")
+}
+
+model TenantSettings {
+  id          String   @id @default(cuid())
+  tenantId    String   @unique
+  settings    Json     @default("{}")
+  features    Json     @default("{}")
+  integrations Json    @default("{}")
+  branding    Json     @default("{}")
+  limits      Json     @default("{}")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [tenantId], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@map("tenant_settings")
+}

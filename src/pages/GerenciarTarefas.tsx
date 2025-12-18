@@ -1,117 +1,26 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
+import apiService from '../services/api';
+import { showToast, showConfirm } from '../utils/toast';
+import { taskStatusToLabel, taskPriorityToLabel } from '../utils/statusMapper';
+import { usePagination } from '../hooks/usePagination';
+import { Task } from '../types';
+import { ExportButton } from '../components/ExportButton';
+import { useTasks, useDeleteTask } from '../hooks/useTasks';
 import { 
   Plus, 
   Calendar, 
-  Users, 
-  Flag, 
-  Clock, 
-  CheckCircle2, 
-  AlertCircle,
   Eye,
   Edit,
   Trash2,
-  Filter,
   Search,
-  MoreHorizontal,
-  User,
-  Tag,
   Paperclip,
   MessageSquare,
-  BarChart3,
   X,
-  Save,
-  RotateCcw
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 
-const mockTasks = [
-  {
-    id: 1,
-    code: 'TSK-001',
-    title: 'Criar apresentação do projeto',
-    description: 'Desenvolver apresentação completa para o cliente TechCorp',
-    project: 'Evento Corporativo Q1',
-    assignee: { id: 1, name: 'Pedro Costa', avatar: 'PC' },
-    status: 'Em andamento',
-    priority: 'Alta',
-    dueDate: '2024-01-25',
-    createdDate: '2024-01-15',
-    tags: ['apresentação', 'cliente'],
-    attachments: 3,
-    comments: 5,
-    progress: 65,
-    estimatedHours: 8,
-    completedHours: 5
-  },
-  {
-    id: 2,
-    code: 'TSK-002',
-    title: 'Revisar cronograma de atividades',
-    description: 'Atualizar cronograma baseado nas mudanças do cliente',
-    project: 'Lançamento Produto',
-    assignee: { id: 2, name: 'Maria Santos', avatar: 'MS' },
-    status: 'Pendente',
-    priority: 'Média',
-    dueDate: '2024-01-28',
-    createdDate: '2024-01-18',
-    tags: ['cronograma', 'planejamento'],
-    attachments: 1,
-    comments: 2,
-    progress: 0,
-    estimatedHours: 4,
-    completedHours: 0
-  },
-  {
-    id: 3,
-    code: 'TSK-003',
-    title: 'Preparar material de treinamento',
-    description: 'Criar conteúdo e materiais para workshop digital',
-    project: 'Workshop Digital',
-    assignee: { id: 3, name: 'Ana Oliveira', avatar: 'AO' },
-    status: 'Concluído',
-    priority: 'Baixa',
-    dueDate: '2024-01-20',
-    createdDate: '2024-01-10',
-    tags: ['treinamento', 'conteúdo'],
-    attachments: 7,
-    comments: 8,
-    progress: 100,
-    estimatedHours: 6,
-    completedHours: 6
-  },
-  {
-    id: 4,
-    code: 'TSK-004',
-    title: 'Atualizar documentação técnica',
-    description: 'Revisar e atualizar toda documentação do sistema',
-    project: 'Sistema Interno',
-    assignee: { id: 1, name: 'Pedro Costa', avatar: 'PC' },
-    status: 'Em andamento',
-    priority: 'Média',
-    dueDate: '2024-01-30',
-    createdDate: '2024-01-22',
-    tags: ['documentação', 'técnico'],
-    attachments: 2,
-    comments: 3,
-    progress: 25,
-    estimatedHours: 12,
-    completedHours: 3
-  }
-];
-
-const mockUsers = [
-  { id: 1, name: 'Pedro Costa', email: 'pedro@gestorpro.com', avatar: 'PC', role: 'Funcionário' },
-  { id: 2, name: 'Maria Santos', email: 'maria@gestorpro.com', avatar: 'MS', role: 'Gestor' },
-  { id: 3, name: 'Ana Oliveira', email: 'ana@gestorpro.com', avatar: 'AO', role: 'Diretor' },
-  { id: 4, name: 'João Silva', email: 'joao@gestorpro.com', avatar: 'JS', role: 'Administrador' }
-];
-
-const mockProjects = [
-  { id: 1, name: 'Evento Corporativo Q1', color: 'blue' },
-  { id: 2, name: 'Lançamento Produto', color: 'green' },
-  { id: 3, name: 'Workshop Digital', color: 'purple' },
-  { id: 4, name: 'Sistema Interno', color: 'orange' }
-];
 
 const getStatusColor = (status: string) => {
   switch (status) {
@@ -143,7 +52,8 @@ const getPriorityIcon = (priority: string) => {
 };
 
 export default function GerenciarTarefas() {
-  const [tasks, setTasks] = useState(mockTasks);
+  const [projects, setProjects] = useState<any[]>([]);
+  const [users, setUsers] = useState<any[]>([]);
   const [selectedTask, setSelectedTask] = useState<number | null>(null);
   const [filterStatus, setFilterStatus] = useState('all');
   const [filterAssignee, setFilterAssignee] = useState('all');
@@ -163,7 +73,26 @@ export default function GerenciarTarefas() {
   const [newColumnName, setNewColumnName] = useState('');
   const [columns, setColumns] = useState(['Pendente', 'Em andamento', 'Concluído']);
   
-  const [selectedTaskForView, setSelectedTaskForView] = useState<any>(null);
+  const [selectedTaskForView] = useState<any>(null);
+
+  const { data: tasks = [], isLoading, refetch } = useTasks();
+  const deleteTaskMutation = useDeleteTask();
+
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        const [projectsRes, usersRes] = await Promise.all([
+          apiService.getProjects(),
+          apiService.getUsers()
+        ]);
+        setProjects((projectsRes as any)?.data?.projects || (projectsRes as any)?.projects || []);
+        setUsers((usersRes as any)?.data?.users || (usersRes as any)?.users || []);
+      } catch (error) {
+        console.error('Error loading data:', error);
+      }
+    };
+    loadData();
+  }, []);
 
   useEffect(() => {
     const modal = searchParams.get('modal');
@@ -173,20 +102,42 @@ export default function GerenciarTarefas() {
     }
   }, [searchParams, setSearchParams, navigate]);
 
-  const handleUpdateTaskStatus = (taskId: number, newStatus: string) => {
-    setTasks(tasks.map(task => 
-      task.id === taskId ? { ...task, status: newStatus } : task
-    ));
+  const mapStatusToApi = (status: string): string => {
+    const statusMap: Record<string, string> = {
+      'Pendente': 'TODO',
+      'Em andamento': 'IN_PROGRESS',
+      'Concluído': 'DONE',
+      'A Iniciar': 'TODO',
+      'Em Andamento': 'IN_PROGRESS',
+      'TODO': 'TODO',
+      'IN_PROGRESS': 'IN_PROGRESS',
+      'DONE': 'DONE',
+      'REVIEW': 'REVIEW',
+      'CANCELLED': 'CANCELLED'
+    };
+    return statusMap[status] || status.toUpperCase();
   };
 
-  const handleDeleteTask = (taskId: number) => {
-    setTasks(tasks.filter(task => task.id !== taskId));
+  const handleUpdateTaskStatus = async (taskId: number | string, newStatus: string) => {
+    try {
+      const apiStatus = mapStatusToApi(newStatus);
+      await apiService.changeTaskStatus(String(taskId), apiStatus);
+      refetch();
+      showToast.success('Status da tarefa atualizado!');
+    } catch (error: any) {
+      console.error('Error updating task status:', error);
+      const message = error.response?.data?.message || error.message || 'Erro ao atualizar status da tarefa';
+      showToast.error(message);
+    }
   };
 
-  const handleDragStart = (e: React.DragEvent, taskId: number) => {
-    setDraggedTask(taskId);
-    e.dataTransfer.effectAllowed = 'move';
+  const handleDeleteTask = async (taskId: number | string) => {
+    const confirmed = await showConfirm('Tem certeza que deseja deletar esta tarefa? Esta ação não pode ser desfeita.');
+    if (!confirmed) return;
+    
+    deleteTaskMutation.mutate(String(taskId));
   };
+
 
   const handleDragOver = (e: React.DragEvent, status: string) => {
     e.preventDefault();
@@ -198,51 +149,60 @@ export default function GerenciarTarefas() {
     setDragOverColumn(null);
   };
 
-  const handleDrop = (e: React.DragEvent, status: string) => {
+  const handleDrop = async (e: React.DragEvent, status: string) => {
     e.preventDefault();
     if (draggedTask) {
-      handleUpdateTaskStatus(draggedTask, status);
+      await handleUpdateTaskStatus(draggedTask, status);
       setDraggedTask(null);
     }
     setDragOverColumn(null);
   };
 
-  const handleInlineEdit = (taskId: number) => {
-    setTasks(tasks.map(task => 
-      task.id === taskId 
-        ? { ...task, title: editingTitle, description: editingDescription }
-        : task
-    ));
-    setEditingTask(null);
-    setEditingTitle('');
-    setEditingDescription('');
+  const handleInlineEdit = async (taskId: number | string) => {
+    try {
+      await apiService.updateTask(String(taskId), {
+        title: editingTitle,
+        description: editingDescription
+      });
+      setEditingTask(null);
+      setEditingTitle('');
+      setEditingDescription('');
+      refetch();
+      showToast.success('Tarefa atualizada com sucesso!');
+    } catch (error) {
+      console.error('Error updating task:', error);
+      showToast.error('Erro ao atualizar tarefa');
+    }
   };
 
-  const handleQuickCreate = (status: string) => {
+  const handleQuickCreate = async (status: string) => {
     if (!quickCreateTitle.trim()) return;
 
-    const task = {
-      id: Math.max(...tasks.map(t => t.id)) + 1,
-      code: `TSK-${String(Math.max(...tasks.map(t => t.id)) + 1).padStart(3, '0')}`,
-      title: quickCreateTitle,
-      description: '',
-      project: 'Projeto Rápido',
-      assignee: { id: 1, name: 'Usuário Atual', avatar: 'UA' },
-      status: status,
-      priority: 'Média',
-      dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-      createdDate: new Date().toISOString().split('T')[0],
-      tags: [],
-      attachments: 0,
-      comments: 0,
-      progress: 0,
-      estimatedHours: 1,
-      completedHours: 0
-    };
+    try {
+      const firstProject = projects.length > 0 ? projects[0] : null;
+      const firstUser = users.length > 0 ? users[0] : null;
+      
+      const taskData = {
+        title: quickCreateTitle,
+        description: '',
+        projectId: firstProject?.id || '',
+        assigneeId: firstUser?.id || firstUser?.userId || '',
+        status: mapStatusToApi(status),
+        priority: 'MEDIUM',
+        dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+        estimatedHours: 1
+      };
 
-    setTasks([...tasks, task]);
-    setQuickCreateTitle('');
-    setShowQuickCreate(null);
+      await apiService.createTask(taskData);
+      setQuickCreateTitle('');
+      setShowQuickCreate(null);
+      refetch();
+      showToast.success('Tarefa criada com sucesso!');
+    } catch (error: any) {
+      console.error('Error creating quick task:', error);
+      const message = error.response?.data?.message || error.message || 'Erro ao criar tarefa';
+      showToast.error(`Erro ao criar tarefa: ${message}`);
+    }
   };
 
   const handleViewTask = (taskId: number) => {
@@ -253,6 +213,32 @@ export default function GerenciarTarefas() {
     navigate('/tarefas/nova');
   };
 
+  const filteredTasks = useMemo(() => {
+    let filtered = tasks as Task[];
+    
+    if (searchTerm) {
+      filtered = filtered.filter(task => 
+        task.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        task.description?.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+    }
+    
+    if (filterStatus !== 'all') {
+      filtered = filtered.filter(task => {
+        const taskStatusLabel = taskStatusToLabel[task.status] || task.status;
+        return taskStatusLabel === filterStatus || task.status === filterStatus;
+      });
+    }
+    
+    if (filterAssignee !== 'all') {
+      filtered = filtered.filter(task => 
+        (task.assigneeId || task.assignee?.id)?.toString() === filterAssignee
+      );
+    }
+    
+    return filtered;
+  }, [tasks, searchTerm, filterStatus, filterAssignee]);
+
   const handleEditTask = (taskId: number) => {
     navigate(`/tarefas/${taskId}/editar`);
   };
@@ -261,7 +247,7 @@ export default function GerenciarTarefas() {
     if (!newColumnName.trim()) return;
     
     if (columns.includes(newColumnName)) {
-      alert('Já existe um quadro com esse nome!');
+      showToast.error('Já existe um quadro com esse nome!');
       return;
     }
     
@@ -270,38 +256,60 @@ export default function GerenciarTarefas() {
     setShowAddColumnModal(false);
   };
 
-  const handleDeleteColumn = (columnName: string) => {
+  const handleDeleteColumn = async (columnName: string) => {
     if (columns.length <= 1) {
-      alert('Não é possível excluir o último quadro!');
+      showToast.error('Não é possível excluir o último quadro!');
       return;
     }
     
-    // Mover tarefas deste quadro para o primeiro quadro disponível
     const targetColumn = columns.find(col => col !== columnName);
     if (targetColumn) {
-      setTasks(tasks.map(task => 
-        task.status === columnName 
-          ? { ...task, status: targetColumn }
-          : task
-      ));
+      const tasksToUpdate = tasks.filter(task => {
+        const taskStatusLabel = taskStatusToLabel[task.status] || task.status;
+        return taskStatusLabel === columnName;
+      });
+      
+      for (const task of tasksToUpdate) {
+        try {
+          const targetStatus = mapStatusToApi(targetColumn);
+          await apiService.changeTaskStatus(String(task.id), targetStatus);
+        } catch (error) {
+          console.error(`Error updating task ${task.id}:`, error);
+        }
+      }
+      
+      await loadData();
     }
     
     setColumns(columns.filter(col => col !== columnName));
   };
 
-  const filteredTasks = tasks.filter(task => {
-    const matchesStatus = filterStatus === 'all' || task.status === filterStatus;
-    const matchesAssignee = filterAssignee === 'all' || task.assignee.id.toString() === filterAssignee;
-    const matchesSearch = task.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         task.description.toLowerCase().includes(searchTerm.toLowerCase());
-    
-    return matchesStatus && matchesAssignee && matchesSearch;
+  const {
+    currentPage,
+    totalPages,
+    paginatedItems: paginatedTasks,
+    totalItems,
+    hasNextPage,
+    hasPreviousPage,
+    nextPage,
+    previousPage,
+    goToFirstPage,
+    goToLastPage
+  } = usePagination({
+    items: filteredTasks,
+    itemsPerPage: 10,
+    initialPage: 1
   });
 
-  const tasksByStatus = columns.reduce((acc, column) => {
-    acc[column] = filteredTasks.filter(t => t.status === column);
-    return acc;
-  }, {} as Record<string, typeof filteredTasks>);
+  const tasksByStatus = useMemo(() => {
+    return columns.reduce((acc, column) => {
+      acc[column] = filteredTasks.filter((t: Task) => {
+        const taskStatusLabel = taskStatusToLabel[t.status] || t.status;
+        return taskStatusLabel === column || t.status === column;
+      });
+      return acc;
+    }, {} as Record<string, Task[]>);
+  }, [filteredTasks, columns]);
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -342,13 +350,36 @@ export default function GerenciarTarefas() {
               className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             >
               <option value="all">Todos os Responsáveis</option>
-              {mockUsers.map(user => (
-                <option key={user.id} value={user.id.toString()}>{user.name}</option>
+              {users.map(user => (
+                <option key={user.id || user.userId} value={(user.userId || user.id).toString()}>
+                  {user.firstName} {user.lastName}
+                </option>
               ))}
             </select>
           </div>
           
           <div className="flex items-center space-x-3">
+            {filteredTasks.length > 0 && viewMode === 'list' && (
+              <ExportButton
+                title="Relatório de Tarefas"
+                data={filteredTasks.map(t => ({
+                  title: t.title,
+                  status: taskStatusToLabel[t.status] || t.status,
+                  priority: taskPriorityToLabel[t.priority] || t.priority,
+                  assignee: users.find(u => (u.id || u.userId) === (t.assigneeId || t.assignee?.id))?.firstName + ' ' + users.find(u => (u.id || u.userId) === (t.assigneeId || t.assignee?.id))?.lastName || 'N/A',
+                  dueDate: t.dueDate ? new Date(t.dueDate).toLocaleDateString('pt-BR') : 'N/A'
+                }))}
+                columns={['title', 'status', 'priority', 'assignee', 'dueDate']}
+                columnLabels={{
+                  title: 'Título',
+                  status: 'Status',
+                  priority: 'Prioridade',
+                  assignee: 'Responsável',
+                  dueDate: 'Prazo'
+                }}
+                variant="icon"
+              />
+            )}
             <div className="flex bg-gray-100 rounded-lg p-1">
               <button
                 onClick={() => setViewMode('list')}
@@ -382,7 +413,7 @@ export default function GerenciarTarefas() {
       {/* Visualização */}
       {viewMode === 'list' ? (
         <div className="space-y-4 animate-slide-up delay-200">
-          {filteredTasks.map((task) => (
+          {paginatedTasks.map((task) => (
             <div
               key={task.id}
               className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6 hover:shadow-md transition-all cursor-pointer"
@@ -401,9 +432,9 @@ export default function GerenciarTarefas() {
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
                         <div className="flex items-center space-x-2 mb-2">
-                          <span className="text-xs font-medium bg-blue-100 text-blue-800 px-2 py-1 rounded-full">{task.code}</span>
-                          <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(task.status)}`}>
-                            {task.status}
+                          <span className="text-xs font-medium bg-blue-100 text-blue-800 px-2 py-1 rounded-full">{task.code || `TSK-${task.id}`}</span>
+                          <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(taskStatusToLabel[task.status] || task.status)}`}>
+                            {taskStatusToLabel[task.status] || task.status}
                           </span>
                         </div>
                         <h3 className="text-lg font-medium text-gray-900 mb-1">{task.title}</h3>
@@ -412,11 +443,11 @@ export default function GerenciarTarefas() {
                         <div className="flex flex-wrap items-center gap-4 text-sm text-gray-500">
                           <div className="flex items-center space-x-1">
                             <span className="font-medium">Projeto:</span>
-                            <span>{task.project}</span>
+                            <span>{projects.find(p => (p.id || p.projectId) === (task.projectId || task.project?.id))?.name || 'N/A'}</span>
                           </div>
                           <div className="flex items-center space-x-1">
                             <span className="font-medium">Responsável:</span>
-                            <span>{task.assignee.name}</span>
+                            <span>{users.find(u => (u.id || u.userId) === (task.assigneeId || task.assignee?.id || task.assignee?.userId))?.firstName + ' ' + users.find(u => (u.id || u.userId) === (task.assigneeId || task.assignee?.id || task.assignee?.userId))?.lastName || 'N/A'}</span>
                           </div>
                           <div className="flex items-center space-x-1">
                             <Calendar size={14} className="text-gray-400" />
@@ -431,11 +462,11 @@ export default function GerenciarTarefas() {
                 {/* Status, prioridade e progresso */}
                 <div className="flex flex-col sm:flex-row sm:items-center gap-4">
                   <div className="flex items-center space-x-3">
-                    <span className={`inline-flex px-3 py-1 text-xs font-semibold rounded-full ${getStatusColor(task.status)}`}>
-                      {task.status}
+                    <span className={`inline-flex px-3 py-1 text-xs font-semibold rounded-full ${getStatusColor(taskStatusToLabel[task.status] || task.status)}`}>
+                      {taskStatusToLabel[task.status] || task.status}
                     </span>
-                    <span className={`text-sm font-medium ${getPriorityColor(task.priority)}`}>
-                      {getPriorityIcon(task.priority)} {task.priority}
+                    <span className={`text-sm font-medium ${getPriorityColor(taskPriorityToLabel[task.priority] || task.priority)}`}>
+                      {getPriorityIcon(taskPriorityToLabel[task.priority] || task.priority)} {taskPriorityToLabel[task.priority] || task.priority}
                     </span>
                   </div>
                   
@@ -488,6 +519,49 @@ export default function GerenciarTarefas() {
               </div>
             </div>
           ))}
+          
+          {totalPages > 1 && (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 flex items-center justify-between">
+              <div className="text-sm text-gray-700">
+                Mostrando <span className="font-medium">{(currentPage - 1) * 10 + 1}</span> a{' '}
+                <span className="font-medium">{Math.min(currentPage * 10, totalItems)}</span> de{' '}
+                <span className="font-medium">{totalItems}</span> tarefas
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={goToFirstPage}
+                  disabled={!hasPreviousPage}
+                  className="px-3 py-1 text-sm border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+                >
+                  Primeira
+                </button>
+                <button
+                  onClick={previousPage}
+                  disabled={!hasPreviousPage}
+                  className="p-1 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+                >
+                  <ChevronLeft size={20} />
+                </button>
+                <span className="px-4 py-1 text-sm text-gray-700">
+                  Página {currentPage} de {totalPages}
+                </span>
+                <button
+                  onClick={nextPage}
+                  disabled={!hasNextPage}
+                  className="p-1 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+                >
+                  <ChevronRight size={20} />
+                </button>
+                <button
+                  onClick={goToLastPage}
+                  disabled={!hasNextPage}
+                  className="px-3 py-1 text-sm border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+                >
+                  Última
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       ) : (
         <div className="animate-slide-up delay-300">
@@ -618,9 +692,9 @@ export default function GerenciarTarefas() {
                           <div className="flex items-start justify-between mb-2">
                             <div className="flex-1">
                               <div className="flex items-center space-x-2 mb-1">
-                                <span className="text-xs font-medium bg-blue-100 text-blue-800 px-2 py-1 rounded-full">{task.code}</span>
-                                <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(task.status)}`}>
-                                  {task.status}
+                                <span className="text-xs font-medium bg-blue-100 text-blue-800 px-2 py-1 rounded-full">{task.code || `TSK-${task.id}`}</span>
+                                <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(taskStatusToLabel[task.status] || task.status)}`}>
+                                  {taskStatusToLabel[task.status] || task.status}
                                 </span>
                               </div>
                               <h4 className="text-sm font-medium text-gray-900">{task.title}</h4>
@@ -660,41 +734,51 @@ export default function GerenciarTarefas() {
                             </div>
                           </div>
                           
-                          <p className="text-xs text-gray-600 mb-3">{task.description}</p>
+                          <p className="text-xs text-gray-600 mb-3">{task.description || 'Sem descrição'}</p>
                           
                           <div className="flex items-center justify-between mb-2">
-                            <div className="flex items-center space-x-2">
-                              <div className="w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center">
-                                <span className="text-xs text-white font-medium">{task.assignee.avatar}</span>
-                              </div>
-                              <span className="text-xs text-gray-600">{task.assignee.name}</span>
+                          <div className="flex items-center space-x-2">
+                            <div className="w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center">
+                              <span className="text-xs text-white font-medium">
+                                {(() => {
+                                  const assignee = users.find(u => (u.id || u.userId) === (task.assigneeId || task.assignee?.id || task.assignee?.userId));
+                                  return assignee ? `${assignee.firstName?.[0] || ''}${assignee.lastName?.[0] || ''}` : 'N/A';
+                                })()}
+                              </span>
                             </div>
+                            <span className="text-xs text-gray-600">
+                              {(() => {
+                                const assignee = users.find(u => (u.id || u.userId) === (task.assigneeId || task.assignee?.id || task.assignee?.userId));
+                                return assignee ? `${assignee.firstName} ${assignee.lastName}` : 'N/A';
+                              })()}
+                            </span>
+                          </div>
                             <span className="text-xs text-gray-500">{task.project}</span>
                           </div>
                           
                           <div className="flex items-center justify-between">
-                            <div className="flex items-center space-x-2">
-                              <Calendar size={12} className="text-gray-400" />
-                              <span className="text-xs text-gray-500">{new Date(task.dueDate).toLocaleDateString('pt-BR')}</span>
-                            </div>
-                            <div className="flex items-center space-x-2">
-                              <Paperclip size={12} className="text-gray-400" />
-                              <span className="text-xs text-gray-500">{task.attachments}</span>
-                              <MessageSquare size={12} className="text-gray-400" />
-                              <span className="text-xs text-gray-500">{task.comments}</span>
-                            </div>
+                          <div className="flex items-center space-x-2">
+                            <Calendar size={12} className="text-gray-400" />
+                            <span className="text-xs text-gray-500">{task.dueDate ? new Date(task.dueDate).toLocaleDateString('pt-BR') : 'N/A'}</span>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <Paperclip size={12} className="text-gray-400" />
+                            <span className="text-xs text-gray-500">{task.attachments?.length || 0}</span>
+                            <MessageSquare size={12} className="text-gray-400" />
+                            <span className="text-xs text-gray-500">{task.comments?.length || 0}</span>
+                          </div>
                           </div>
                           
-                          {task.progress > 0 && (
+                          {(task.progress || 0) > 0 && (
                             <div className="mt-3">
                               <div className="flex items-center justify-between mb-1">
                                 <span className="text-xs text-gray-600">Progresso</span>
-                                <span className="text-xs text-gray-600">{task.progress}%</span>
+                                <span className="text-xs text-gray-600">{task.progress || 0}%</span>
                               </div>
                               <div className="w-full bg-gray-200 rounded-full h-1">
                                 <div 
                                   className="bg-blue-600 h-1 rounded-full" 
-                                  style={{ width: `${task.progress}%` }}
+                                  style={{ width: `${task.progress || 0}%` }}
                                 ></div>
                               </div>
                             </div>

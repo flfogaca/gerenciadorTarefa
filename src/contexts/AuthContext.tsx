@@ -1,93 +1,108 @@
-import { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import apiService from '../services/api';
+
+interface User {
+  id: string;
+  userId: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  role: string;
+  tenantId: string;
+  profile: any;
+  permissions: string[];
+}
 
 interface AuthContextType {
+  user: User | null;
   isAuthenticated: boolean;
-  login: (email: string, password: string) => Promise<boolean>;
+  isLoading: boolean;
+  login: (email: string, password: string, tenantId?: string) => Promise<void>;
   logout: () => void;
-  user: {
-    name: string;
-    email: string;
-    role: string;
-    permissions: string[];
-  } | null;
+  checkAuth: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [user, setUser] = useState<{ name: string; email: string; role: string; permissions: string[] } | null>(null);
-
-  useEffect(() => {
-    const savedAuth = localStorage.getItem('auth');
-    if (savedAuth) {
-      const { isAuth, userData } = JSON.parse(savedAuth);
-      setIsAuthenticated(isAuth);
-      setUser(userData);
-    }
-  }, []);
-
-  const login = async (email: string, password: string): Promise<boolean> => {
-    const users = {
-      'admin@gestorpro.com': {
-        name: 'João Silva',
-        email: email,
-        role: 'Administrador',
-        permissions: ['all']
-      },
-      'gestor@gestorpro.com': {
-        name: 'Maria Santos',
-        email: email,
-        role: 'Gestor',
-        permissions: ['dashboard', 'cronograma', 'tarefas', 'financeiro', 'relatorios', 'notificacoes', 'perfil']
-      },
-      'funcionario@gestorpro.com': {
-        name: 'Pedro Costa',
-        email: email,
-        role: 'Funcionário',
-        permissions: ['dashboard', 'cronograma', 'tarefas', 'notificacoes', 'perfil']
-      },
-      'diretor@gestorpro.com': {
-        name: 'Ana Oliveira',
-        email: email,
-        role: 'Diretor',
-        permissions: ['dashboard', 'financeiro', 'relatorios', 'notificacoes', 'perfil']
-      }
-    };
-
-    if (password === '123456' && users[email.toLowerCase() as keyof typeof users]) {
-      const userData = users[email.toLowerCase() as keyof typeof users];
-      
-      setIsAuthenticated(true);
-      setUser(userData);
-      
-      localStorage.setItem('auth', JSON.stringify({
-        isAuth: true,
-        userData: userData
-      }));
-      
-      return true;
-    }
-    return false;
-  };
-
-  const logout = () => {
-    setIsAuthenticated(false);
-    setUser(null);
-    localStorage.removeItem('auth');
-  };
-
-  return (
-    <AuthContext.Provider value={{ isAuthenticated, login, logout, user }}>
-      {children}
-    </AuthContext.Provider>
-  );
-}
-
-export function useAuth() {
+export const useAuth = () => {
   const context = useContext(AuthContext);
   if (context === undefined) {
     throw new Error('useAuth must be used within an AuthProvider');
   }
   return context;
+};
+
+interface AuthProviderProps {
+  children: ReactNode;
 }
+
+export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
+  const [user, setUser] = useState<User | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const isAuthenticated = !!user;
+
+  const login = async (email: string, password: string, tenantId: string = 'default-tenant') => {
+    try {
+      setIsLoading(true);
+      const data = await apiService.login(email, password, tenantId);
+      if (data?.user) {
+        setUser(data.user);
+      }
+    } catch (error: any) {
+      const errorMessage = error.message || 'Erro ao fazer login';
+      console.error('Login error:', errorMessage, error);
+      const formattedError = new Error(errorMessage);
+      if (error.response) {
+        (formattedError as any).response = error.response;
+      }
+      if (error.status) {
+        (formattedError as any).status = error.status;
+      }
+      throw formattedError;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const logout = () => {
+    apiService.logout();
+    setUser(null);
+  };
+
+  const checkAuth = async () => {
+    try {
+      const token = localStorage.getItem('authToken');
+      if (token) {
+        const userData = await apiService.getCurrentUser();
+        setUser(userData);
+      }
+    } catch (error) {
+      console.error('Auth check error:', error);
+      localStorage.removeItem('authToken');
+      localStorage.removeItem('tenantId');
+      setUser(null);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    checkAuth();
+  }, []);
+
+  const value: AuthContextType = {
+    user,
+    isAuthenticated,
+    isLoading,
+    login,
+    logout,
+    checkAuth,
+  };
+
+  return (
+    <AuthContext.Provider value={value}>
+      {children}
+    </AuthContext.Provider>
+  );
+};

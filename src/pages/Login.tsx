@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Eye, EyeOff, ArrowRight } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -18,14 +18,11 @@ export default function Login() {
     setError('');
     
     try {
-      const success = await login(email, password);
-      if (success) {
-        navigate('/dashboard');
-      } else {
-        setError('Email ou senha incorretos');
-      }
-    } catch (err) {
-      setError('Erro ao fazer login');
+      await login(email, password);
+      navigate('/dashboard');
+    } catch (err: any) {
+      const errorMessage = err.message || err.response?.data?.message || err.response?.data?.error || 'Erro ao fazer login';
+      setError(errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -117,9 +114,9 @@ export default function Login() {
             </div>
 
             <div className="text-sm">
-              <a href="#" className="font-medium text-blue-600 hover:text-blue-500">
+              <Link to="/forgot-password" className="font-medium text-blue-600 hover:text-blue-500">
                 Esqueceu sua senha?
-              </a>
+              </Link>
             </div>
           </div>
 
@@ -146,15 +143,16 @@ export default function Login() {
           <div className="text-center">
             <p className="text-sm text-gray-600">
               Não tem uma conta?{' '}
-              <a href="#" className="font-medium text-blue-600 hover:text-blue-500">
-                Solicite acesso
-              </a>
+              <Link to="/register" className="font-medium text-blue-600 hover:text-blue-500">
+                Criar conta
+              </Link>
             </p>
           </div>
         </form>
 
+        {import.meta.env.DEV && (
             <div className="mt-8 p-4 bg-blue-50 rounded-lg animate-slide-up delay-300">
-              <h3 className="text-sm font-medium text-blue-800 mb-3">Credenciais de Demonstração:</h3>
+              <h3 className="text-sm font-medium text-blue-800 mb-3">Credenciais de Demonstração (apenas desenvolvimento):</h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs text-blue-700">
                 <div className="space-y-1">
                   <p className="font-semibold text-blue-800">Administrador</p>
@@ -178,6 +176,7 @@ export default function Login() {
                 </div>
               </div>
             </div>
+        )}
       </div>
     </div>
   );

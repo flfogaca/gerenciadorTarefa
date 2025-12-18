@@ -2,6 +2,17 @@
 @tailwind components;
 @tailwind utilities;
 
+@layer base {
+  :root {
+    --color-bg-primary: 255 255 255;
+    --color-bg-secondary: 249 250 251;
+    --color-text-primary: 17 24 39;
+    --color-text-secondary: 75 85 99;
+    --color-border: 229 231 235;
+    --color-shadow: 0 1 3 0 rgb(0 0 0 / 0.1);
+  }
+}
+
 @layer utilities {
   .animate-fade-in {
     animation: fadeIn 0.5s ease-in-out;
@@ -126,6 +137,15 @@
   }
 }
 
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
 @layer components {
   .btn-primary {
     @apply bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-all-smooth hover:shadow-lg hover:-translate-y-0.5 active:translate-y-0;
@@ -152,7 +172,7 @@
   }
   
   .input-field {
-    @apply w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all-smooth;
+    @apply w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all-smooth bg-white text-gray-900;
   }
   
   .sidebar-item {
@@ -207,6 +227,34 @@
     @apply animate-pulse bg-gray-200 rounded;
   }
   
+  .skeleton-card {
+    @apply animate-pulse bg-gray-200 rounded-xl h-32;
+  }
+  
+  .skeleton-text {
+    @apply animate-pulse bg-gray-200 rounded h-4 mb-2;
+  }
+  
+  .skeleton-avatar {
+    @apply animate-pulse bg-gray-200 rounded-full;
+  }
+  
+  .loading-overlay {
+    @apply fixed inset-0 bg-black/50 flex items-center justify-center z-50 backdrop-blur-sm;
+  }
+  
+  .loading-spinner-small {
+    @apply animate-spin rounded-full border-2 border-gray-300 border-t-blue-600 w-4 h-4;
+  }
+  
+  .loading-spinner-medium {
+    @apply animate-spin rounded-full border-2 border-gray-300 border-t-blue-600 w-6 h-6;
+  }
+  
+  .loading-spinner-large {
+    @apply animate-spin rounded-full border-2 border-gray-300 border-t-blue-600 w-8 h-8;
+  }
+  
   .gradient-text {
     @apply bg-gradient-to-r from-blue-600 to-cyan-500 bg-clip-text text-transparent;
   }
@@ -227,9 +275,50 @@
     @apply hover:scale-105 transition-transform-smooth;
   }
   
-      .hover-glow {
-        @apply hover:shadow-lg hover:shadow-blue-500/25 transition-all-smooth;
-      }
+  .hover-glow {
+    @apply hover:shadow-lg hover:shadow-blue-500/25 transition-all-smooth;
+  }
+  
+  .button-press {
+    @apply active:scale-95 transition-transform duration-75;
+  }
+  
+  .card-flip {
+    @apply hover:rotate-1 transition-transform duration-300;
+  }
+  
+  .text-shimmer {
+    @apply bg-gradient-to-r from-gray-200 via-gray-100 to-gray-200 bg-[length:200%_100%] animate-shimmer;
+  }
+  
+  .ripple-effect {
+    @apply relative overflow-hidden;
+  }
+  
+  .ripple-effect::before {
+    content: '';
+    @apply absolute inset-0 bg-white/20 scale-0 rounded-full transition-transform duration-500;
+  }
+  
+  .ripple-effect:active::before {
+    @apply scale-100;
+  }
+  
+  .floating-action {
+    @apply fixed bottom-6 right-6 z-40 animate-float shadow-lg hover:shadow-xl transition-all-smooth;
+  }
+  
+  .glass-card {
+    @apply bg-white/10 backdrop-blur-md border border-white/20;
+  }
+  
+  .neon-border {
+    @apply border-2 border-blue-400 shadow-[0_0_10px_rgba(59,130,246,0.5)];
+  }
+  
+  .touch-friendly {
+    @apply min-h-[44px] min-w-[44px];
+  }
       
       .drag-over {
         @apply bg-blue-50 border-blue-200 border-2 border-dashed;

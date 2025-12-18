@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Calendar, 
   Clock, 
@@ -13,93 +13,8 @@ import {
   List,
   Calendar as CalendarIcon
 } from 'lucide-react';
+import apiService from '../services/api';
 
-const mockActivities = [
-  {
-    id: 1,
-    projectId: 1,
-    projectName: 'Evento Corporativo Q1',
-    client: 'TechCorp Brasil',
-    area: 'Negócios',
-    activity: 'Briefing inicial e levantamento de requisitos',
-    responsible: 'Maria Silva',
-    startDate: '2025-01-10',
-    endDate: '2025-01-15',
-    status: 'Concluído',
-    progress: 100,
-    attachments: 3
-  },
-  {
-    id: 2,
-    projectId: 1,
-    projectName: 'Evento Corporativo Q1',
-    client: 'TechCorp Brasil',
-    area: 'Gestão de Projeto',
-    activity: 'Planejamento estratégico e cronograma',
-    responsible: 'João Santos',
-    startDate: '2025-01-16',
-    endDate: '2025-01-25',
-    status: 'Em Andamento',
-    progress: 75,
-    attachments: 1
-  },
-  {
-    id: 3,
-    projectId: 1,
-    projectName: 'Evento Corporativo Q1',
-    client: 'TechCorp Brasil',
-    area: 'Planejamento',
-    activity: 'Definição de escopo e recursos',
-    responsible: 'Ana Costa',
-    startDate: '2025-01-26',
-    endDate: '2025-02-05',
-    status: 'Em Andamento',
-    progress: 40,
-    attachments: 0
-  },
-  {
-    id: 4,
-    projectId: 1,
-    projectName: 'Evento Corporativo Q1',
-    client: 'TechCorp Brasil',
-    area: 'Criação',
-    activity: 'Desenvolvimento de identidade visual',
-    responsible: 'Carlos Lima',
-    startDate: '2025-02-06',
-    endDate: '2025-02-20',
-    status: 'A Iniciar',
-    progress: 0,
-    attachments: 0
-  },
-  {
-    id: 5,
-    projectId: 1,
-    projectName: 'Evento Corporativo Q1',
-    client: 'TechCorp Brasil',
-    area: 'Produção',
-    activity: 'Execução do evento',
-    responsible: 'Pedro Oliveira',
-    startDate: '2025-03-10',
-    endDate: '2025-03-15',
-    status: 'A Iniciar',
-    progress: 0,
-    attachments: 0
-  },
-  {
-    id: 6,
-    projectId: 2,
-    projectName: 'Lançamento Produto',
-    client: 'Inovação Ltda',
-    area: 'Negócios',
-    activity: 'Proposta comercial',
-    responsible: 'Maria Silva',
-    startDate: '2025-02-01',
-    endDate: '2025-02-10',
-    status: 'Em Andamento',
-    progress: 60,
-    attachments: 2
-  }
-];
 
 const areas = ['Negócios', 'Gestão de Projeto', 'Planejamento', 'Criação', 'Produção', 'Arquitetura', 'Financeiro'];
 
@@ -131,7 +46,10 @@ export default function Cronograma() {
   const [selectedProject, setSelectedProject] = useState('all');
   const [selectedArea, setSelectedArea] = useState('all');
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [activities, setActivities] = useState(mockActivities);
+  const [activities, setActivities] = useState<any[]>([]);
+  const [projects, setProjects] = useState<any[]>([]);
+  const [tasks, setTasks] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
   const [newActivity, setNewActivity] = useState({
     projectId: '',
@@ -147,46 +65,118 @@ export default function Cronograma() {
     attachments: 0
   });
 
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const loadData = async () => {
+    try {
+      setIsLoading(true);
+      const [projectsResponse, tasksResponse] = await Promise.all([
+        apiService.getProjects(),
+        apiService.getTasks()
+      ]);
+
+      const projectsData = (projectsResponse as any).projects || [];
+      const tasksData = (tasksResponse as any).tasks || [];
+
+      setProjects(projectsData);
+      setTasks(tasksData);
+
+      const activitiesFromTasks = tasksData.map((task: any) => ({
+        id: task.id,
+        projectId: task.projectId || task.project?.id || '',
+        projectName: task.project?.name || task.projectName || 'Sem Projeto',
+        client: task.project?.clientName || task.client || '',
+        area: task.category || task.area || 'Geral',
+        activity: task.title || task.name || task.description || '',
+        responsible: task.assignee?.name || task.assignedTo || '',
+        startDate: task.startDate || task.createdAt?.split('T')[0] || '',
+        endDate: task.dueDate || task.endDate || task.dueDate?.split('T')[0] || '',
+        status: mapTaskStatus(task.status),
+        progress: task.progress || 0,
+        attachments: task.attachments?.length || 0
+      }));
+
+      setActivities(activitiesFromTasks);
+    } catch (error: any) {
+      console.error('Error loading schedule data:', error);
+      const message = error.response?.data?.message || error.message || 'Erro ao carregar dados do cronograma';
+      
+      if (activities.length === 0) {
+        setActivities([]);
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const mapTaskStatus = (status: string) => {
+    const statusMap: Record<string, string> = {
+      'pending': 'A Iniciar',
+      'in_progress': 'Em Andamento',
+      'completed': 'Concluído',
+      'cancelled': 'Parado',
+      'Pendente': 'A Iniciar',
+      'Em andamento': 'Em Andamento',
+      'Concluído': 'Concluído'
+    };
+    return statusMap[status] || status || 'A Iniciar';
+  };
+
   const filteredActivities = activities.filter(activity => {
     if (selectedProject !== 'all' && activity.projectId.toString() !== selectedProject) return false;
     if (selectedArea !== 'all' && activity.area !== selectedArea) return false;
     return true;
   });
 
-  const handleCreateActivity = () => {
-    if (!newActivity.projectName || !newActivity.activity || !newActivity.responsible || !newActivity.startDate || !newActivity.endDate) return;
+  const handleCreateActivity = async () => {
+    if (!newActivity.projectId || !newActivity.activity || !newActivity.startDate || !newActivity.endDate) return;
 
-    const activity = {
-      id: Math.max(...activities.map(a => a.id)) + 1,
-      projectId: parseInt(newActivity.projectId) || 1,
-      projectName: newActivity.projectName,
-      client: newActivity.client,
-      area: newActivity.area,
-      activity: newActivity.activity,
-      responsible: newActivity.responsible,
-      startDate: newActivity.startDate,
-      endDate: newActivity.endDate,
-      status: newActivity.status,
-      progress: newActivity.progress,
-      attachments: newActivity.attachments
-    };
+    try {
+      const taskData = {
+        title: newActivity.activity,
+        description: newActivity.activity,
+        projectId: newActivity.projectId,
+        assigneeId: newActivity.responsible,
+        startDate: newActivity.startDate,
+        dueDate: newActivity.endDate,
+        status: 'pending',
+        priority: 'medium'
+      };
 
-    setActivities([...activities, activity]);
-    setShowCreateModal(false);
-    setNewActivity({
-      projectId: '',
-      projectName: '',
-      client: '',
-      area: '',
-      activity: '',
-      responsible: '',
-      startDate: '',
-      endDate: '',
-      status: 'Pendente',
-      progress: 0,
-      attachments: 0
-    });
+      await apiService.createTask(taskData);
+      await loadData();
+      setShowCreateModal(false);
+      setNewActivity({
+        projectId: '',
+        projectName: '',
+        client: '',
+        area: '',
+        activity: '',
+        responsible: '',
+        startDate: '',
+        endDate: '',
+        status: 'Pendente',
+        progress: 0,
+        attachments: 0
+      });
+    } catch (error) {
+      console.error('Error creating activity:', error);
+      alert('Erro ao criar atividade');
+    }
   };
+
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <div className="animate-pulse">
+          <div className="h-8 bg-gray-200 rounded w-1/4 mb-4"></div>
+          <div className="h-64 bg-gray-200 rounded"></div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -215,8 +205,11 @@ export default function Cronograma() {
                 className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               >
                 <option value="all">Todos os Projetos</option>
-                <option value="1">Evento Corporativo Q1</option>
-                <option value="2">Lançamento Produto</option>
+                {projects.map((project) => (
+                  <option key={project.id} value={project.id}>
+                    {project.name}
+                  </option>
+                ))}
               </select>
             </div>
             <select 
@@ -304,20 +297,132 @@ export default function Cronograma() {
 
         {viewMode === 'gantt' && (
           <div className="space-y-4">
-            <div className="text-center py-12 text-gray-500">
-              <Grid3X3 size={48} className="mx-auto mb-4 text-gray-300" />
-              <p>Visualização Gantt em desenvolvimento</p>
-              <p className="text-sm">Esta funcionalidade será implementada em breve</p>
+            <div className="overflow-x-auto">
+              <div className="min-w-full">
+                <div className="grid grid-cols-[200px_1fr] gap-4">
+                  <div className="font-semibold text-sm text-gray-700 p-2 border-b">Atividade</div>
+                  <div className="font-semibold text-sm text-gray-700 p-2 border-b">Cronograma</div>
+                  
+                  {filteredActivities.map((activity) => {
+                    const startDate = new Date(activity.startDate);
+                    const endDate = new Date(activity.endDate);
+                    const today = new Date();
+                    const totalDays = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
+                    const daysPassed = Math.ceil((today.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
+                    const progressPercent = Math.max(0, Math.min(100, (daysPassed / totalDays) * 100));
+                    
+                    return (
+                      <React.Fragment key={activity.id}>
+                        <div className="p-2 border-b text-sm">
+                          <div className="font-medium text-gray-900">{activity.activity}</div>
+                          <div className="text-xs text-gray-500">{activity.projectName}</div>
+                        </div>
+                        <div className="p-2 border-b relative">
+                          <div className="relative h-8 bg-gray-100 rounded">
+                            <div 
+                              className={`absolute h-full rounded ${
+                                activity.status === 'Concluído' ? 'bg-green-500' :
+                                activity.status === 'Em Andamento' ? 'bg-blue-500' :
+                                activity.status === 'Parado' ? 'bg-red-500' : 'bg-gray-400'
+                              }`}
+                              style={{ 
+                                width: `${Math.min(100, progressPercent)}%`,
+                                left: '0%'
+                              }}
+                            ></div>
+                            <div className="absolute inset-0 flex items-center justify-center text-xs text-gray-700 font-medium">
+                              {new Date(activity.startDate).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })} - {new Date(activity.endDate).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}
+                            </div>
+                          </div>
+                        </div>
+                      </React.Fragment>
+                    );
+                  })}
+                  
+                  {filteredActivities.length === 0 && (
+                    <>
+                      <div className="col-span-2 p-8 text-center text-gray-500">
+                        Nenhuma atividade encontrada
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
         )}
 
         {viewMode === 'calendar' && (
           <div className="space-y-4">
-            <div className="text-center py-12 text-gray-500">
-              <CalendarIcon size={48} className="mx-auto mb-4 text-gray-300" />
-              <p>Visualização Calendário em desenvolvimento</p>
-              <p className="text-sm">Esta funcionalidade será implementada em breve</p>
+            <div className="grid grid-cols-7 gap-2">
+              {['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'].map(day => (
+                <div key={day} className="text-center font-semibold text-sm text-gray-700 p-2">
+                  {day}
+                </div>
+              ))}
+              
+              {(() => {
+                const today = new Date();
+                const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
+                const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+                const startDate = new Date(firstDay);
+                startDate.setDate(startDate.getDate() - startDate.getDay());
+                
+                const days: JSX.Element[] = [];
+                const currentDate = new Date(startDate);
+                
+                for (let i = 0; i < 42; i++) {
+                  const dateStr = currentDate.toISOString().split('T')[0];
+                  const dayActivities = filteredActivities.filter(a => {
+                    const start = new Date(a.startDate).toISOString().split('T')[0];
+                    const end = new Date(a.endDate).toISOString().split('T')[0];
+                    return dateStr >= start && dateStr <= end;
+                  });
+                  
+                  const isCurrentMonth = currentDate.getMonth() === today.getMonth();
+                  const isToday = dateStr === today.toISOString().split('T')[0];
+                  
+                  days.push(
+                    <div
+                      key={i}
+                      className={`min-h-[80px] p-1 border border-gray-200 ${
+                        isCurrentMonth ? 'bg-white' : 'bg-gray-50'
+                      } ${isToday ? 'ring-2 ring-blue-500' : ''}`}
+                    >
+                      <div className={`text-xs font-medium mb-1 ${
+                        isCurrentMonth ? 'text-gray-900' : 'text-gray-400'
+                      } ${isToday ? 'text-blue-600 font-bold' : ''}`}>
+                        {currentDate.getDate()}
+                      </div>
+                      <div className="space-y-1">
+                        {dayActivities.slice(0, 2).map((activity, idx) => (
+                          <div
+                            key={idx}
+                            className={`text-xs p-1 rounded truncate ${
+                              activity.status === 'Concluído' ? 'bg-green-100 text-green-800' :
+                              activity.status === 'Em Andamento' ? 'bg-blue-100 text-blue-800' :
+                              activity.status === 'Parado' ? 'bg-red-100 text-red-800' :
+                              'bg-gray-100 text-gray-800'
+                            }`}
+                            title={activity.activity}
+                          >
+                            {activity.activity}
+                          </div>
+                        ))}
+                        {dayActivities.length > 2 && (
+                          <div className="text-xs text-gray-500">
+                            +{dayActivities.length - 2} mais
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                  
+                  currentDate.setDate(currentDate.getDate() + 1);
+                }
+                
+                return days;
+              })()}
             </div>
           </div>
         )}
@@ -332,28 +437,36 @@ export default function Cronograma() {
                 <div className="w-3 h-3 bg-green-500 rounded-full mr-3"></div>
                 <span className="text-sm text-gray-600">Concluídas</span>
               </div>
-              <span className="text-sm font-medium text-gray-900">8</span>
+              <span className="text-sm font-medium text-gray-900">
+                {activities.filter(a => a.status === 'Concluído').length}
+              </span>
             </div>
             <div className="flex items-center justify-between">
               <div className="flex items-center">
                 <div className="w-3 h-3 bg-blue-500 rounded-full mr-3"></div>
                 <span className="text-sm text-gray-600">Em Andamento</span>
               </div>
-              <span className="text-sm font-medium text-gray-900">12</span>
+              <span className="text-sm font-medium text-gray-900">
+                {activities.filter(a => a.status === 'Em Andamento').length}
+              </span>
             </div>
             <div className="flex items-center justify-between">
               <div className="flex items-center">
                 <div className="w-3 h-3 bg-gray-500 rounded-full mr-3"></div>
                 <span className="text-sm text-gray-600">A Iniciar</span>
               </div>
-              <span className="text-sm font-medium text-gray-900">15</span>
+              <span className="text-sm font-medium text-gray-900">
+                {activities.filter(a => a.status === 'A Iniciar').length}
+              </span>
             </div>
             <div className="flex items-center justify-between">
               <div className="flex items-center">
                 <div className="w-3 h-3 bg-red-500 rounded-full mr-3"></div>
                 <span className="text-sm text-gray-600">Paradas</span>
               </div>
-              <span className="text-sm font-medium text-gray-900">3</span>
+              <span className="text-sm font-medium text-gray-900">
+                {activities.filter(a => a.status === 'Parado').length}
+              </span>
             </div>
           </div>
         </div>
@@ -361,27 +474,45 @@ export default function Cronograma() {
         <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">Próximos Prazos</h3>
           <div className="space-y-4">
-            <div className="flex items-start space-x-3 p-3 bg-red-50 rounded-lg">
-              <AlertCircle className="text-red-500 flex-shrink-0 mt-0.5" size={16} />
-              <div>
-                <p className="text-sm font-medium text-red-800">Briefing inicial</p>
-                <p className="text-xs text-red-600">Evento Corporativo Q1 - 2 dias</p>
-              </div>
-            </div>
-            <div className="flex items-start space-x-3 p-3 bg-yellow-50 rounded-lg">
-              <Clock className="text-yellow-500 flex-shrink-0 mt-0.5" size={16} />
-              <div>
-                <p className="text-sm font-medium text-yellow-800">Planejamento estratégico</p>
-                <p className="text-xs text-yellow-600">Evento Corporativo Q1 - 5 dias</p>
-              </div>
-            </div>
-            <div className="flex items-start space-x-3 p-3 bg-blue-50 rounded-lg">
-              <Calendar className="text-blue-500 flex-shrink-0 mt-0.5" size={16} />
-              <div>
-                <p className="text-sm font-medium text-blue-800">Proposta comercial</p>
-                <p className="text-xs text-blue-600">Lançamento Produto - 7 dias</p>
-              </div>
-            </div>
+            {(() => {
+              const upcomingDeadlines = activities
+                .filter(a => {
+                  if (!a.endDate) return false;
+                  const endDate = new Date(a.endDate);
+                  const daysUntilDue = Math.ceil((endDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+                  return daysUntilDue > 0 && daysUntilDue <= 7 && a.status !== 'Concluído';
+                })
+                .sort((a, b) => new Date(a.endDate).getTime() - new Date(b.endDate).getTime())
+                .slice(0, 3);
+              
+              if (upcomingDeadlines.length === 0) {
+                return (
+                  <p className="text-sm text-gray-500 text-center py-4">Nenhum prazo próximo</p>
+                );
+              }
+              
+              return upcomingDeadlines.map((activity) => {
+                const endDate = new Date(activity.endDate);
+                const daysUntilDue = Math.ceil((endDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+                const isUrgent = daysUntilDue <= 2;
+                const bgColor = isUrgent ? 'bg-red-50' : daysUntilDue <= 4 ? 'bg-yellow-50' : 'bg-blue-50';
+                const textColor = isUrgent ? 'text-red-800' : daysUntilDue <= 4 ? 'text-yellow-800' : 'text-blue-800';
+                const iconColor = isUrgent ? 'text-red-500' : daysUntilDue <= 4 ? 'text-yellow-500' : 'text-blue-500';
+                const Icon = isUrgent ? AlertCircle : daysUntilDue <= 4 ? Clock : Calendar;
+                
+                return (
+                  <div key={activity.id} className={`flex items-start space-x-3 p-3 ${bgColor} rounded-lg`}>
+                    <Icon className={`${iconColor} flex-shrink-0 mt-0.5`} size={16} />
+                    <div>
+                      <p className={`text-sm font-medium ${textColor}`}>{activity.activity}</p>
+                      <p className={`text-xs ${textColor.replace('800', '600')}`}>
+                        {activity.projectName} - {daysUntilDue} {daysUntilDue === 1 ? 'dia' : 'dias'}
+                      </p>
+                    </div>
+                  </div>
+                );
+              });
+            })()}
           </div>
         </div>
 
@@ -396,7 +527,9 @@ export default function Cronograma() {
                   }`}></div>
                   <span className="text-sm text-gray-600">{area}</span>
                 </div>
-                <span className="text-sm font-medium text-gray-900">{Math.floor(Math.random() * 10) + 1}</span>
+                  <span className="text-sm font-medium text-gray-900">
+                    {activities.filter(a => a.area === area).length}
+                  </span>
               </div>
             ))}
           </div>
@@ -421,14 +554,27 @@ export default function Cronograma() {
               <div className="space-y-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Nome do Projeto *</label>
-                    <input
-                      type="text"
-                      value={newActivity.projectName}
-                      onChange={(e) => setNewActivity({...newActivity, projectName: e.target.value})}
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Projeto *</label>
+                    <select
+                      value={newActivity.projectId}
+                      onChange={(e) => {
+                        const selectedProject = projects.find(p => p.id === e.target.value);
+                        setNewActivity({
+                          ...newActivity,
+                          projectId: e.target.value,
+                          projectName: selectedProject?.name || '',
+                          client: selectedProject?.clientName || ''
+                        });
+                      }}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      placeholder="Digite o nome do projeto"
-                    />
+                    >
+                      <option value="">Selecione um projeto</option>
+                      {projects.map((project) => (
+                        <option key={project.id} value={project.id}>
+                          {project.name}
+                        </option>
+                      ))}
+                    </select>
                   </div>
 
                   <div>

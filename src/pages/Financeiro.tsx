@@ -1,199 +1,366 @@
-import { useState } from 'react';
-import { 
-  DollarSign, 
-  TrendingUp, 
-  TrendingDown, 
-  Upload, 
-  Download, 
-  Plus,
-  Receipt,
-  CreditCard,
-  AlertCircle,
-  CheckCircle2,
-  Clock,
-  Filter,
-  Calendar,
-  Eye,
-  Edit,
-  Trash2,
-  FileText,
-  X,
-  Save,
-  BarChart3,
-  PieChart,
-  TrendingUp as ChartTrendingUp
-} from 'lucide-react';
-
-const mockFinancialData = [
-  {
-    id: 1,
-    projectName: 'Evento Corporativo Q1',
-    client: 'TechCorp Brasil',
-    budgetApproved: 150000,
-    expensesRegistered: 95000,
-    paidValues: 80000,
-    valuesToReceive: 70000,
-    margin: 55000,
-    status: 'Em Andamento',
-    invoices: 12,
-    receipts: 8
-  },
-  {
-    id: 2,
-    projectName: 'Lançamento Produto',
-    client: 'Inovação Ltda',
-    budgetApproved: 85000,
-    expensesRegistered: 25000,
-    paidValues: 20000,
-    valuesToReceive: 65000,
-    margin: 60000,
-    status: 'Em Concorrência',
-    invoices: 3,
-    receipts: 2
-  },
-  {
-    id: 3,
-    projectName: 'Workshop Digital',
-    client: 'Academia Digital',
-    budgetApproved: 25000,
-    expensesRegistered: 25000,
-    paidValues: 25000,
-    valuesToReceive: 0,
-    margin: 0,
-    status: 'Concluído',
-    invoices: 5,
-    receipts: 5
-  }
-];
-
-const mockExpenses = [
-  {
-    id: 1,
-    projectId: 1,
-    projectName: 'Evento Corporativo Q1',
-    category: 'Equipamentos',
-    description: 'Som e iluminação',
-    value: 15000,
-    date: '2025-01-15',
-    status: 'Pago',
-    invoice: 'NF-001234'
-  },
-  {
-    id: 2,
-    projectId: 1,
-    projectName: 'Evento Corporativo Q1',
-    category: 'Marketing',
-    description: 'Material promocional',
-    value: 8000,
-    date: '2025-01-20',
-    status: 'Pendente',
-    invoice: 'NF-001235'
-  },
-  {
-    id: 3,
-    projectId: 2,
-    projectName: 'Lançamento Produto',
-    category: 'Design',
-    description: 'Identidade visual',
-    value: 12000,
-    date: '2025-02-01',
-    status: 'Pago',
-    invoice: 'NF-001236'
-  }
-];
-
-const categories = ['Equipamentos', 'Marketing', 'Design', 'Produção', 'Logística', 'Tecnologia', 'Outros'];
-
-const getStatusColor = (status: string) => {
-  switch (status) {
-    case 'Concluído': return 'bg-green-100 text-green-800';
-    case 'Em Andamento': return 'bg-blue-100 text-blue-800';
-    case 'Em Concorrência': return 'bg-yellow-100 text-yellow-800';
-    case 'Declinado': return 'bg-red-100 text-red-800';
-    default: return 'bg-gray-100 text-gray-800';
-  }
-};
-
-const getPaymentStatusColor = (status: string) => {
-  switch (status) {
-    case 'Pago': return 'bg-green-100 text-green-800';
-    case 'Pendente': return 'bg-yellow-100 text-yellow-800';
-    case 'Atrasado': return 'bg-red-100 text-red-800';
-    default: return 'bg-gray-100 text-gray-800';
-  }
-};
+import { useState, useEffect } from 'react';
+import { DollarSign, TrendingUp, TrendingDown, CheckCircle2, Clock, Plus, Upload, Download, X, AlertCircle, Edit, Trash2, FileText, Receipt } from 'lucide-react';
+import apiService from '../services/api';
+import { useAuth } from '../contexts/AuthContext';
+import { showToast } from '../utils/toast';
+import { ExportButton } from '../components/ExportButton';
+import { exportService } from '../services/exportService';
 
 export default function Financeiro() {
-  const [activeTab, setActiveTab] = useState<'overview' | 'expenses' | 'reports'>('overview');
-  const [selectedProject, setSelectedProject] = useState('all');
-  const [selectedCategory, setSelectedCategory] = useState('all');
-  const [showUploadModal, setShowUploadModal] = useState(false);
+  const { user } = useAuth();
+  const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState('overview');
   const [showExpenseModal, setShowExpenseModal] = useState(false);
-  const [showExportModal, setShowExportModal] = useState(false);
-  const [editingExpense, setEditingExpense] = useState<number | null>(null);
+  const [showInvoiceModal, setShowInvoiceModal] = useState(false);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [editingExpense, setEditingExpense] = useState<string | null>(null);
+  const [editingInvoice, setEditingInvoice] = useState<string | null>(null);
+  const [editingPayment, setEditingPayment] = useState<string | null>(null);
+  
+  const [dashboardReport, setDashboardReport] = useState<any>(null);
+  const [expenses, setExpenses] = useState<any[]>([]);
+  const [invoices, setInvoices] = useState<any[]>([]);
+  const [payments, setPayments] = useState<any[]>([]);
+  const [projects, setProjects] = useState<any[]>([]);
+  const [suppliers, setSuppliers] = useState<any[]>([]);
+  const [clients, setClients] = useState<any[]>([]);
+  
   const [newExpense, setNewExpense] = useState({
     projectId: '',
+    supplierId: '',
     category: '',
     description: '',
-    value: '',
-    date: '',
-    invoice: ''
+    amount: '',
+    currency: 'BRL',
+    date: new Date().toISOString().split('T')[0],
+    invoiceNumber: '',
+    notes: ''
+  });
+  
+  const [newInvoice, setNewInvoice] = useState({
+    projectId: '',
+    clientId: '',
+    supplierId: '',
+    invoiceNumber: '',
+    type: 'income',
+    amount: '',
+    tax: '0',
+    total: '',
+    currency: 'BRL',
+    issueDate: new Date().toISOString().split('T')[0],
+    dueDate: '',
+    notes: ''
+  });
+  
+  const [newPayment, setNewPayment] = useState({
+    invoiceId: '',
+    expenseId: '',
+    amount: '',
+    currency: 'BRL',
+    method: 'bank_transfer',
+    paymentDate: new Date().toISOString().split('T')[0],
+    transactionId: '',
+    notes: ''
   });
 
-  const totalBudget = mockFinancialData.reduce((sum, project) => sum + project.budgetApproved, 0);
-  const totalExpenses = mockFinancialData.reduce((sum, project) => sum + project.expensesRegistered, 0);
-  const totalPaid = mockFinancialData.reduce((sum, project) => sum + project.paidValues, 0);
-  const totalToReceive = mockFinancialData.reduce((sum, project) => sum + project.valuesToReceive, 0);
-  const totalMargin = mockFinancialData.reduce((sum, project) => sum + project.margin, 0);
+  const categories = [
+    'Material',
+    'Serviços',
+    'Equipamentos',
+    'Marketing',
+    'Transporte',
+    'Alimentação',
+    'Hospedagem',
+    'Outros'
+  ];
 
-  const filteredExpenses = mockExpenses.filter(expense => {
-    if (selectedProject !== 'all' && expense.projectId.toString() !== selectedProject) return false;
-    if (selectedCategory !== 'all' && expense.category !== selectedCategory) return false;
-    return true;
-  });
+  useEffect(() => {
+    loadData();
+  }, [activeTab]);
 
-  const handleUploadInvoice = () => {
-    console.log('Upload de nota fiscal');
-    setShowUploadModal(true);
-  };
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      
+      const [reportRes, expensesRes, invoicesRes, paymentsRes, projectsRes, suppliersRes, clientsRes] = await Promise.all([
+        apiService.getFinancialDashboardReport(),
+        apiService.getExpenses(),
+        apiService.getInvoices(),
+        apiService.getPayments(),
+        apiService.getProjects(),
+        apiService.getSuppliers(),
+        apiService.getClients()
+      ]);
 
-  const handleAddExpense = () => {
-    console.log('Adicionar nova despesa');
-    setShowExpenseModal(true);
-  };
-
-  const handleExportData = () => {
-    console.log('Exportar dados financeiros');
-    setShowExportModal(true);
-  };
-
-  const handleViewProject = (projectId: number) => {
-    console.log('Visualizar projeto:', projectId);
-  };
-
-  const handleEditExpense = (expenseId: number) => {
-    console.log('Editar despesa:', expenseId);
-    setEditingExpense(expenseId);
-  };
-
-  const handleDeleteExpense = (expenseId: number) => {
-    console.log('Excluir despesa:', expenseId);
-    if (confirm('Tem certeza que deseja excluir esta despesa?')) {
-      console.log('Despesa excluída:', expenseId);
+      if (reportRes?.data?.report) {
+        setDashboardReport(reportRes.data.report);
+      }
+      
+      setExpenses(expensesRes?.data?.expenses || []);
+      setInvoices(invoicesRes?.data?.invoices || []);
+      setPayments(paymentsRes?.data?.payments || []);
+      setProjects(projectsRes?.data?.projects || []);
+      setSuppliers(suppliersRes?.data?.suppliers || []);
+      setClients(clientsRes?.data?.clients || []);
+    } catch (error) {
+      console.error('Error loading financial data:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleSaveExpense = () => {
-    console.log('Salvar despesa:', newExpense);
+  const handleSaveExpense = async () => {
+    try {
+      const expenseData = {
+        ...newExpense,
+        amount: parseFloat(newExpense.amount),
+        date: new Date(newExpense.date).toISOString()
+      };
+
+      if (editingExpense) {
+        await apiService.updateExpense(editingExpense, expenseData);
+      } else {
+        await apiService.createExpense(expenseData);
+      }
+
+      setShowExpenseModal(false);
+      setEditingExpense(null);
+      setNewExpense({
+        projectId: '',
+        supplierId: '',
+        category: '',
+        description: '',
+        amount: '',
+        currency: 'BRL',
+        date: new Date().toISOString().split('T')[0],
+        invoiceNumber: '',
+        notes: ''
+      });
+      loadData();
+    } catch (error) {
+      console.error('Error saving expense:', error);
+      showToast.error('Erro ao salvar despesa');
+    }
+  };
+
+  const handleSaveInvoice = async () => {
+    try {
+      const invoiceData = {
+        ...newInvoice,
+        amount: parseFloat(newInvoice.amount),
+        tax: parseFloat(newInvoice.tax || '0'),
+        total: parseFloat(newInvoice.total || newInvoice.amount),
+        issueDate: new Date(newInvoice.issueDate).toISOString(),
+        dueDate: newInvoice.dueDate ? new Date(newInvoice.dueDate).toISOString() : null
+      };
+
+      if (editingInvoice) {
+        await apiService.updateInvoice(editingInvoice, invoiceData);
+      } else {
+        await apiService.createInvoice(invoiceData);
+      }
+
+      setShowInvoiceModal(false);
+      setEditingInvoice(null);
+      setNewInvoice({
+        projectId: '',
+        clientId: '',
+        supplierId: '',
+        invoiceNumber: '',
+        type: 'income',
+        amount: '',
+        tax: '0',
+        total: '',
+        currency: 'BRL',
+        issueDate: new Date().toISOString().split('T')[0],
+        dueDate: '',
+        notes: ''
+      });
+      loadData();
+    } catch (error) {
+      console.error('Error saving invoice:', error);
+      showToast.error('Erro ao salvar fatura');
+    }
+  };
+
+  const handleSavePayment = async () => {
+    try {
+      const paymentData = {
+        ...newPayment,
+        amount: parseFloat(newPayment.amount),
+        paymentDate: new Date(newPayment.paymentDate).toISOString()
+      };
+
+      if (editingPayment) {
+        await apiService.updatePayment(editingPayment, paymentData);
+      } else {
+        await apiService.createPayment(paymentData);
+      }
+
+      setShowPaymentModal(false);
+      setEditingPayment(null);
+      setNewPayment({
+        invoiceId: '',
+        expenseId: '',
+        amount: '',
+        currency: 'BRL',
+        method: 'bank_transfer',
+        paymentDate: new Date().toISOString().split('T')[0],
+        transactionId: '',
+        notes: ''
+      });
+      loadData();
+    } catch (error) {
+      console.error('Error saving payment:', error);
+      showToast.error('Erro ao salvar pagamento');
+    }
+  };
+
+  const handleDeleteExpense = async (expenseId: string) => {
+    const confirmed = await showConfirm('Tem certeza que deseja excluir esta despesa?');
+    if (!confirmed) return;
+    
+    try {
+      await apiService.deleteExpense(expenseId);
+      loadData();
+    } catch (error) {
+      console.error('Error deleting expense:', error);
+      showToast.error('Erro ao excluir despesa');
+    }
+  };
+
+  const handleDeleteInvoice = async (invoiceId: string) => {
+    const confirmed = await showConfirm('Tem certeza que deseja excluir esta fatura?');
+    if (!confirmed) return;
+    
+    try {
+      await apiService.deleteInvoice(invoiceId);
+      loadData();
+    } catch (error) {
+      console.error('Error deleting invoice:', error);
+      showToast.error('Erro ao excluir fatura');
+    }
+  };
+
+  const handleDeletePayment = async (paymentId: string) => {
+    const confirmed = await showConfirm('Tem certeza que deseja excluir este pagamento?');
+    if (!confirmed) return;
+    
+    try {
+      await apiService.deletePayment(paymentId);
+      loadData();
+    } catch (error) {
+      console.error('Error deleting payment:', error);
+      showToast.error('Erro ao excluir pagamento');
+    }
+  };
+
+  const handleEditExpense = (expense: any) => {
+    setEditingExpense(expense.id);
     setNewExpense({
-      projectId: '',
-      category: '',
-      description: '',
-      value: '',
-      date: '',
-      invoice: ''
+      projectId: expense.projectId || '',
+      supplierId: expense.supplierId || '',
+      category: expense.category || '',
+      description: expense.description || '',
+      amount: expense.amount?.toString() || '',
+      currency: expense.currency || 'BRL',
+      date: expense.date ? new Date(expense.date).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+      invoiceNumber: expense.invoiceNumber || '',
+      notes: expense.notes || ''
     });
-    setShowExpenseModal(false);
+    setShowExpenseModal(true);
+  };
+
+  const handleEditInvoice = (invoice: any) => {
+    setEditingInvoice(invoice.id);
+    setNewInvoice({
+      projectId: invoice.projectId || '',
+      clientId: invoice.clientId || '',
+      supplierId: invoice.supplierId || '',
+      invoiceNumber: invoice.invoiceNumber || '',
+      type: invoice.type || 'income',
+      amount: invoice.amount?.toString() || '',
+      tax: invoice.tax?.toString() || '0',
+      total: invoice.total?.toString() || '',
+      currency: invoice.currency || 'BRL',
+      issueDate: invoice.issueDate ? new Date(invoice.issueDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+      dueDate: invoice.dueDate ? new Date(invoice.dueDate).toISOString().split('T')[0] : '',
+      notes: invoice.notes || ''
+    });
+    setShowInvoiceModal(true);
+  };
+
+  const handleMarkInvoiceAsPaid = async (invoiceId: string) => {
+    try {
+      await apiService.markInvoiceAsPaid(invoiceId);
+      loadData();
+    } catch (error) {
+      console.error('Error marking invoice as paid:', error);
+      showToast.error('Erro ao marcar fatura como paga');
+    }
+  };
+
+  const handleMarkExpenseAsPaid = async (expenseId: string) => {
+    try {
+      await apiService.markExpenseAsPaid(expenseId);
+      loadData();
+    } catch (error) {
+      console.error('Error marking expense as paid:', error);
+      showToast.error('Erro ao marcar despesa como paga');
+    }
+  };
+
+  const getStatusColor = (status: string) => {
+    const colors: Record<string, string> = {
+      'pending': 'bg-yellow-100 text-yellow-800',
+      'approved': 'bg-blue-100 text-blue-800',
+      'rejected': 'bg-red-100 text-red-800',
+      'paid': 'bg-green-100 text-green-800',
+      'draft': 'bg-gray-100 text-gray-800',
+      'sent': 'bg-blue-100 text-blue-800',
+      'overdue': 'bg-red-100 text-red-800',
+      'cancelled': 'bg-gray-100 text-gray-800',
+      'completed': 'bg-green-100 text-green-800',
+      'failed': 'bg-red-100 text-red-800',
+      'refunded': 'bg-orange-100 text-orange-800'
+    };
+    return colors[status] || 'bg-gray-100 text-gray-800';
+  };
+
+  const getStatusLabel = (status: string) => {
+    const labels: Record<string, string> = {
+      'pending': 'Pendente',
+      'approved': 'Aprovado',
+      'rejected': 'Rejeitado',
+      'paid': 'Pago',
+      'draft': 'Rascunho',
+      'sent': 'Enviado',
+      'overdue': 'Vencido',
+      'cancelled': 'Cancelado',
+      'completed': 'Concluído',
+      'failed': 'Falhou',
+      'refunded': 'Reembolsado'
+    };
+    return labels[status] || status;
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-gray-500">Carregando...</div>
+      </div>
+    );
+  }
+
+  const summary = dashboardReport?.summary || {
+    totalIncome: 0,
+    totalExpenses: 0,
+    netProfit: 0,
+    totalInvoices: 0,
+    paidInvoices: 0,
+    overdueInvoices: 0,
+    totalPayments: 0,
+    pendingPayments: 0
   };
 
   return (
@@ -202,18 +369,66 @@ export default function Financeiro() {
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
             <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Financeiro</h1>
-            <p className="text-gray-600 mt-2">Controle de custos e investimentos dos projetos</p>
+            <p className="text-gray-600 mt-2">Controle completo de finanças</p>
           </div>
-          <div className="flex flex-col sm:flex-row gap-3">
+          <div className="flex flex-col sm:flex-row gap-3 items-center">
+            {dashboardReport && (
+              <ExportButton
+                title="Relatório Financeiro"
+                data={[dashboardReport]}
+                columns={[]}
+                onExportPDF={() => {
+                  const reportData = {
+                    stats: dashboardReport,
+                    expenses: expenses.slice(0, 100),
+                    invoices: invoices.slice(0, 100),
+                    payments: payments.slice(0, 100)
+                  };
+                  exportService.exportDashboardToPDF(reportData, 'Relatório Financeiro');
+                }}
+                variant="icon"
+              />
+            )}
             <button 
-              onClick={handleUploadInvoice}
+              onClick={() => {
+                setEditingInvoice(null);
+                setNewInvoice({
+                  projectId: '',
+                  clientId: '',
+                  supplierId: '',
+                  invoiceNumber: '',
+                  type: 'income',
+                  amount: '',
+                  tax: '0',
+                  total: '',
+                  currency: 'BRL',
+                  issueDate: new Date().toISOString().split('T')[0],
+                  dueDate: '',
+                  notes: ''
+                });
+                setShowInvoiceModal(true);
+              }}
               className="btn-success flex items-center justify-center w-full sm:w-auto"
             >
-              <Upload size={20} className="mr-2" />
-              Upload NF
+              <Receipt size={20} className="mr-2" />
+              Nova Fatura
             </button>
             <button 
-              onClick={handleAddExpense}
+              onClick={() => {
+                setEditingExpense(null);
+                setNewExpense({
+                  projectId: '',
+                  supplierId: '',
+                  category: '',
+                  description: '',
+                  amount: '',
+                  currency: 'BRL',
+                  date: new Date().toISOString().split('T')[0],
+                  invoiceNumber: '',
+                  notes: ''
+                });
+                setShowExpenseModal(true);
+              }}
               className="btn-primary flex items-center justify-center w-full sm:w-auto"
             >
               <Plus size={20} className="mr-2" />
@@ -223,21 +438,18 @@ export default function Financeiro() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 sm:gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
         <div className="bg-white p-4 sm:p-6 rounded-xl shadow-sm border border-gray-200">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600">Budget Total</p>
-              <p className="text-xl sm:text-2xl font-bold text-gray-900 mt-1">R$ {totalBudget.toLocaleString('pt-BR')}</p>
+              <p className="text-sm font-medium text-gray-600">Receita Total</p>
+              <p className="text-xl sm:text-2xl font-bold text-gray-900 mt-1">
+                R$ {summary.totalIncome.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+              </p>
             </div>
-            <div className="p-2 sm:p-3 bg-blue-100 rounded-lg">
-              <DollarSign className="text-blue-600" size={20} />
+            <div className="p-2 sm:p-3 bg-green-100 rounded-lg">
+              <TrendingUp className="text-green-600" size={20} />
             </div>
-          </div>
-          <div className="mt-3 sm:mt-4 flex items-center">
-            <TrendingUp className="text-green-500 mr-1" size={14} />
-            <span className="text-xs sm:text-sm text-green-600 font-medium">+12%</span>
-            <span className="text-xs sm:text-sm text-gray-500 ml-2 hidden sm:inline">vs mês anterior</span>
           </div>
         </div>
 
@@ -245,611 +457,364 @@ export default function Financeiro() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-gray-600">Despesas</p>
-              <p className="text-xl sm:text-2xl font-bold text-gray-900 mt-1">R$ {totalExpenses.toLocaleString('pt-BR')}</p>
+              <p className="text-xl sm:text-2xl font-bold text-gray-900 mt-1">
+                R$ {summary.totalExpenses.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+              </p>
             </div>
             <div className="p-2 sm:p-3 bg-red-100 rounded-lg">
               <TrendingDown className="text-red-600" size={20} />
             </div>
           </div>
-          <div className="mt-3 sm:mt-4 flex items-center">
-            <TrendingUp className="text-red-500 mr-1" size={14} />
-            <span className="text-xs sm:text-sm text-red-600 font-medium">+8%</span>
-            <span className="text-xs sm:text-sm text-gray-500 ml-2 hidden sm:inline">vs mês anterior</span>
+        </div>
+
+        <div className="bg-white p-4 sm:p-6 rounded-xl shadow-sm border border-gray-200">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-600">Lucro Líquido</p>
+              <p className={`text-xl sm:text-2xl font-bold mt-1 ${
+                summary.netProfit >= 0 ? 'text-green-600' : 'text-red-600'
+              }`}>
+                R$ {summary.netProfit.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+              </p>
+            </div>
+            <div className="p-2 sm:p-3 bg-blue-100 rounded-lg">
+              <DollarSign className="text-blue-600" size={20} />
+            </div>
           </div>
         </div>
 
         <div className="bg-white p-4 sm:p-6 rounded-xl shadow-sm border border-gray-200">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600">Valores Pagos</p>
-              <p className="text-xl sm:text-2xl font-bold text-gray-900 mt-1">R$ {totalPaid.toLocaleString('pt-BR')}</p>
+              <p className="text-sm font-medium text-gray-600">Faturas Vencidas</p>
+              <p className="text-xl sm:text-2xl font-bold text-red-600 mt-1">
+                {summary.overdueInvoices || 0}
+              </p>
             </div>
-            <div className="p-2 sm:p-3 bg-green-100 rounded-lg">
-              <CheckCircle2 className="text-green-600" size={20} />
+            <div className="p-2 sm:p-3 bg-red-100 rounded-lg">
+              <AlertCircle className="text-red-600" size={20} />
             </div>
-          </div>
-          <div className="mt-3 sm:mt-4 flex items-center">
-            <TrendingUp className="text-green-500 mr-1" size={14} />
-            <span className="text-xs sm:text-sm text-green-600 font-medium">+15%</span>
-            <span className="text-xs sm:text-sm text-gray-500 ml-2 hidden sm:inline">vs mês anterior</span>
-          </div>
-        </div>
-
-        <div className="bg-white p-4 sm:p-6 rounded-xl shadow-sm border border-gray-200">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600">A Receber</p>
-              <p className="text-xl sm:text-2xl font-bold text-gray-900 mt-1">R$ {totalToReceive.toLocaleString('pt-BR')}</p>
-            </div>
-            <div className="p-2 sm:p-3 bg-yellow-100 rounded-lg">
-              <Clock className="text-yellow-600" size={20} />
-            </div>
-          </div>
-          <div className="mt-3 sm:mt-4 flex items-center">
-            <TrendingDown className="text-yellow-500 mr-1" size={14} />
-            <span className="text-xs sm:text-sm text-yellow-600 font-medium">-5%</span>
-            <span className="text-xs sm:text-sm text-gray-500 ml-2 hidden sm:inline">vs mês anterior</span>
-          </div>
-        </div>
-
-        <div className="bg-white p-4 sm:p-6 rounded-xl shadow-sm border border-gray-200">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600">Margem</p>
-              <p className="text-xl sm:text-2xl font-bold text-gray-900 mt-1">R$ {totalMargin.toLocaleString('pt-BR')}</p>
-            </div>
-            <div className="p-2 sm:p-3 bg-purple-100 rounded-lg">
-              <TrendingUp className="text-purple-600" size={20} />
-            </div>
-          </div>
-          <div className="mt-3 sm:mt-4 flex items-center">
-            <TrendingUp className="text-purple-500 mr-1" size={14} />
-            <span className="text-xs sm:text-sm text-purple-600 font-medium">+22%</span>
-            <span className="text-xs sm:text-sm text-gray-500 ml-2 hidden sm:inline">vs mês anterior</span>
           </div>
         </div>
       </div>
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-200">
         <div className="p-4 sm:p-6 border-b border-gray-200">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <div className="flex flex-wrap gap-1 bg-gray-100 rounded-lg p-1">
-              <button
-                onClick={() => setActiveTab('overview')}
-                className={`px-3 sm:px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                  activeTab === 'overview' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-600 hover:text-gray-900'
-                }`}
-              >
-                Visão Geral
-              </button>
-              <button
-                onClick={() => setActiveTab('expenses')}
-                className={`px-3 sm:px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                  activeTab === 'expenses' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-600 hover:text-gray-900'
-                }`}
-              >
-                Despesas
-              </button>
-              <button
-                onClick={() => setActiveTab('reports')}
-                className={`px-3 sm:px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                  activeTab === 'reports' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-600 hover:text-gray-900'
-                }`}
-              >
-                Relatórios
-              </button>
-            </div>
-            <div className="flex items-center space-x-3">
-              <button 
-                onClick={handleExportData}
-                className="btn-secondary flex items-center justify-center w-full sm:w-auto"
-              >
-                <Download size={20} className="mr-2" />
-                Exportar
-              </button>
-            </div>
+          <div className="flex flex-wrap gap-1 bg-gray-100 rounded-lg p-1">
+            <button
+              onClick={() => setActiveTab('overview')}
+              className={`px-3 sm:px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                activeTab === 'overview' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              Visão Geral
+            </button>
+            <button
+              onClick={() => setActiveTab('expenses')}
+              className={`px-3 sm:px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                activeTab === 'expenses' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              Despesas ({expenses.length})
+            </button>
+            <button
+              onClick={() => setActiveTab('invoices')}
+              className={`px-3 sm:px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                activeTab === 'invoices' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              Faturas ({invoices.length})
+            </button>
+            <button
+              onClick={() => setActiveTab('payments')}
+              className={`px-3 sm:px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                activeTab === 'payments' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              Pagamentos ({payments.length})
+            </button>
           </div>
         </div>
 
         <div className="p-4 sm:p-6">
           {activeTab === 'overview' && (
             <div className="space-y-6">
-              <div className="grid grid-cols-1 gap-4">
-                {mockFinancialData.map((project) => (
-                  <div key={project.id} className="bg-gray-50 rounded-lg p-4 hover:bg-gray-100 transition-colors">
-                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                      <div className="flex-1">
-                        <div className="flex items-start justify-between mb-2">
-                          <div>
-                            <h3 className="text-lg font-semibold text-gray-900">{project.projectName}</h3>
-                            <p className="text-sm text-gray-600">{project.client}</p>
-                            <p className="text-xs text-gray-500 mt-1">{project.invoices} NFs • {project.receipts} recibos</p>
-                          </div>
-                          <div className="flex items-center space-x-2">
-                            <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(project.status)}`}>
-                              {project.status}
-                            </span>
-                            <div className="flex items-center space-x-1">
-                              <button
-                                onClick={() => handleViewProject(project.id)}
-                                className="p-1 text-gray-400 hover:text-blue-600 transition-colors"
-                                title="Visualizar"
-                              >
-                                <Eye size={16} />
-                              </button>
-                              <button
-                                onClick={() => console.log('Editar projeto:', project.id)}
-                                className="p-1 text-gray-400 hover:text-green-600 transition-colors"
-                                title="Editar"
-                              >
-                                <Edit size={16} />
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                        
-                        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 mt-4">
-                          <div className="text-center">
-                            <p className="text-xs text-gray-500 uppercase tracking-wide">Budget</p>
-                            <p className="text-sm font-semibold text-gray-900">R$ {project.budgetApproved.toLocaleString('pt-BR')}</p>
-                          </div>
-                          <div className="text-center">
-                            <p className="text-xs text-gray-500 uppercase tracking-wide">Despesas</p>
-                            <p className="text-sm font-semibold text-gray-900">R$ {project.expensesRegistered.toLocaleString('pt-BR')}</p>
-                          </div>
-                          <div className="text-center">
-                            <p className="text-xs text-gray-500 uppercase tracking-wide">Pago</p>
-                            <p className="text-sm font-semibold text-gray-900">R$ {project.paidValues.toLocaleString('pt-BR')}</p>
-                          </div>
-                          <div className="text-center">
-                            <p className="text-xs text-gray-500 uppercase tracking-wide">A Receber</p>
-                            <p className="text-sm font-semibold text-gray-900">R$ {project.valuesToReceive.toLocaleString('pt-BR')}</p>
-                          </div>
-                          <div className="text-center">
-                            <p className="text-xs text-gray-500 uppercase tracking-wide">Margem</p>
-                            <p className="text-sm font-semibold text-gray-900">R$ {project.margin.toLocaleString('pt-BR')}</p>
-                          </div>
-                        </div>
-                      </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="bg-gray-50 p-6 rounded-xl">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Resumo Financeiro</h3>
+                  <div className="space-y-3">
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-gray-600">Total de Faturas</span>
+                      <span className="text-sm font-semibold text-gray-900">{summary.totalInvoices}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-gray-600">Faturas Pagas</span>
+                      <span className="text-sm font-semibold text-green-600">{summary.paidInvoices}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-gray-600">Pagamentos Pendentes</span>
+                      <span className="text-sm font-semibold text-yellow-600">{summary.pendingPayments}</span>
                     </div>
                   </div>
-                ))}
+                </div>
+
+                {dashboardReport?.expensesByCategory && dashboardReport.expensesByCategory.length > 0 && (
+                  <div className="bg-gray-50 p-6 rounded-xl">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-4">Despesas por Categoria</h3>
+                    <div className="space-y-3">
+                      {dashboardReport.expensesByCategory.slice(0, 5).map((item: any, index: number) => (
+                        <div key={index} className="flex items-center justify-between">
+                          <span className="text-sm text-gray-600">{item.category}</span>
+                          <span className="text-sm font-semibold text-gray-900">
+                            R$ {item.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           )}
 
           {activeTab === 'expenses' && (
-            <div className="space-y-6">
-              <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-                <div className="flex flex-col sm:flex-row sm:items-center gap-2">
-                  <div className="flex items-center space-x-2">
-                    <Filter size={20} className="text-gray-500" />
-                    <select 
-                      value={selectedProject}
-                      onChange={(e) => setSelectedProject(e.target.value)}
-                      className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent w-full sm:w-auto"
-                    >
-                      <option value="all">Todos os Projetos</option>
-                      <option value="1">Evento Corporativo Q1</option>
-                      <option value="2">Lançamento Produto</option>
-                    </select>
-                  </div>
-                  <select 
-                    value={selectedCategory}
-                    onChange={(e) => setSelectedCategory(e.target.value)}
-                    className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent w-full sm:w-auto"
-                  >
-                    <option value="all">Todas as Categorias</option>
-                    {categories.map(category => (
-                      <option key={category} value={category}>{category}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div className="space-y-4">
-                {filteredExpenses.map((expense) => (
-                  <div key={expense.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-sm transition-shadow">
-                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                      <div className="flex-1">
-                        <div className="flex flex-wrap items-center gap-2 mb-2">
-                          <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
-                            {expense.category}
-                          </span>
-                          <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getPaymentStatusColor(expense.status)}`}>
-                            {expense.status}
-                          </span>
-                        </div>
-                        <h3 className="text-lg font-semibold text-gray-900 mb-1">{expense.description}</h3>
-                        <p className="text-sm text-gray-600 mb-2">
-                          <strong>Projeto:</strong> {expense.projectName}
-                        </p>
-                        <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 text-sm text-gray-500">
-                          <div className="flex items-center">
-                            <Receipt size={16} className="mr-1" />
-                            {expense.invoice}
-                          </div>
-                          <div className="flex items-center">
-                            <Calendar size={16} className="mr-1" />
-                            {new Date(expense.date).toLocaleDateString('pt-BR')}
-                          </div>
-                        </div>
-                      </div>
-                      <div className="flex items-center justify-between sm:justify-end gap-4">
-                        <div className="text-right">
-                          <p className="text-xl font-bold text-gray-900">
-                            R$ {expense.value.toLocaleString('pt-BR')}
-                          </p>
-                        </div>
-                        <div className="flex items-center space-x-1">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-gray-200">
+                    <th className="text-left py-3 px-4 font-medium text-gray-700">Data</th>
+                    <th className="text-left py-3 px-4 font-medium text-gray-700">Categoria</th>
+                    <th className="text-left py-3 px-4 font-medium text-gray-700">Descrição</th>
+                    <th className="text-right py-3 px-4 font-medium text-gray-700">Valor</th>
+                    <th className="text-center py-3 px-4 font-medium text-gray-700">Status</th>
+                    <th className="text-center py-3 px-4 font-medium text-gray-700">Ações</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {expenses.map((expense) => (
+                    <tr key={expense.id} className="border-b border-gray-100 hover:bg-gray-50">
+                      <td className="py-3 px-4 text-gray-600">
+                        {new Date(expense.date).toLocaleDateString('pt-BR')}
+                      </td>
+                      <td className="py-3 px-4 text-gray-600">{expense.category}</td>
+                      <td className="py-3 px-4 font-medium text-gray-900">{expense.description}</td>
+                      <td className="py-3 px-4 text-right font-medium text-gray-900">
+                        R$ {expense.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      </td>
+                      <td className="py-3 px-4 text-center">
+                        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(expense.status)}`}>
+                          {getStatusLabel(expense.status)}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 text-center">
+                        <div className="flex items-center justify-center gap-2">
+                          {expense.status !== 'paid' && (
+                            <button
+                              onClick={() => handleMarkExpenseAsPaid(expense.id)}
+                              className="text-green-600 hover:text-green-800"
+                              title="Marcar como pago"
+                            >
+                              <CheckCircle2 size={16} />
+                            </button>
+                          )}
                           <button
-                            onClick={() => handleEditExpense(expense.id)}
-                            className="p-1 text-gray-400 hover:text-green-600 transition-colors"
+                            onClick={() => handleEditExpense(expense)}
+                            className="text-blue-600 hover:text-blue-800"
                             title="Editar"
                           >
                             <Edit size={16} />
                           </button>
                           <button
                             onClick={() => handleDeleteExpense(expense.id)}
-                            className="p-1 text-gray-400 hover:text-red-600 transition-colors"
+                            className="text-red-600 hover:text-red-800"
                             title="Excluir"
                           >
                             <Trash2 size={16} />
                           </button>
                         </div>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
+                      </td>
+                    </tr>
+                  ))}
+                  {expenses.length === 0 && (
+                    <tr>
+                      <td colSpan={6} className="py-8 text-center text-gray-500">
+                        Nenhuma despesa encontrada
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
             </div>
           )}
 
-          {activeTab === 'reports' && (
-            <div className="space-y-6">
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-lg font-semibold text-gray-900">Orçado vs Realizado</h3>
-                    <BarChart3 className="text-blue-600" size={20} />
-                  </div>
-                  <div className="space-y-4">
-                    {mockFinancialData.map((project) => {
-                      const percentage = (project.expensesRegistered / project.budgetApproved) * 100;
-                      return (
-                        <div key={project.id} className="space-y-2">
-                          <div className="flex justify-between text-sm">
-                            <span className="font-medium text-gray-700">{project.projectName}</span>
-                            <span className="text-gray-600">{percentage.toFixed(1)}%</span>
-                          </div>
-                          <div className="w-full bg-gray-200 rounded-full h-2">
-                            <div 
-                              className={`h-2 rounded-full transition-all duration-300 ${
-                                percentage > 90 ? 'bg-red-500' : percentage > 70 ? 'bg-yellow-500' : 'bg-green-500'
-                              }`}
-                              style={{ width: `${Math.min(percentage, 100)}%` }}
-                            ></div>
-                          </div>
-                          <div className="flex justify-between text-xs text-gray-500">
-                            <span>R$ {project.expensesRegistered.toLocaleString('pt-BR')}</span>
-                            <span>R$ {project.budgetApproved.toLocaleString('pt-BR')}</span>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-lg font-semibold text-gray-900">Custos por Categoria</h3>
-                    <PieChart className="text-green-600" size={20} />
-                  </div>
-                  <div className="space-y-3">
-                    {categories.map((category, index) => {
-                      const total = mockExpenses
-                        .filter(expense => expense.category === category)
-                        .reduce((sum, expense) => sum + expense.value, 0);
-                      const percentage = (total / mockExpenses.reduce((sum, expense) => sum + expense.value, 0)) * 100;
-                      const colors = ['bg-purple-500', 'bg-blue-500', 'bg-green-500', 'bg-yellow-500', 'bg-orange-500', 'bg-pink-500', 'bg-indigo-500'];
-                      
-                      return (
-                        <div key={category} className="flex items-center justify-between">
-                          <div className="flex items-center">
-                            <div className={`w-3 h-3 rounded-full mr-3 ${colors[index]}`}></div>
-                            <span className="text-sm text-gray-600">{category}</span>
-                          </div>
-                          <div className="text-right">
-                            <span className="text-sm font-medium text-gray-900">
-                              R$ {total.toLocaleString('pt-BR')}
-                            </span>
-                            <span className="text-xs text-gray-500 ml-2">
-                              ({percentage.toFixed(1)}%)
-                            </span>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-lg font-semibold text-gray-900">Fluxo de Caixa</h3>
-                    <ChartTrendingUp className="text-purple-600" size={20} />
-                  </div>
-                  <div className="space-y-3">
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm text-gray-600">Entradas</span>
-                      <span className="text-sm font-semibold text-green-600">
-                        R$ {(totalPaid + totalToReceive).toLocaleString('pt-BR')}
-                      </span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm text-gray-600">Saídas</span>
-                      <span className="text-sm font-semibold text-red-600">
-                        R$ {totalExpenses.toLocaleString('pt-BR')}
-                      </span>
-                    </div>
-                    <div className="border-t pt-3">
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm font-medium text-gray-900">Saldo</span>
-                        <span className={`text-sm font-semibold ${totalMargin >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                          R$ {totalMargin.toLocaleString('pt-BR')}
+          {activeTab === 'invoices' && (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-gray-200">
+                    <th className="text-left py-3 px-4 font-medium text-gray-700">Número</th>
+                    <th className="text-left py-3 px-4 font-medium text-gray-700">Tipo</th>
+                    <th className="text-left py-3 px-4 font-medium text-gray-700">Data Emissão</th>
+                    <th className="text-left py-3 px-4 font-medium text-gray-700">Vencimento</th>
+                    <th className="text-right py-3 px-4 font-medium text-gray-700">Total</th>
+                    <th className="text-center py-3 px-4 font-medium text-gray-700">Status</th>
+                    <th className="text-center py-3 px-4 font-medium text-gray-700">Ações</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {invoices.map((invoice) => (
+                    <tr key={invoice.id} className="border-b border-gray-100 hover:bg-gray-50">
+                      <td className="py-3 px-4 font-medium text-gray-900">{invoice.invoiceNumber}</td>
+                      <td className="py-3 px-4 text-gray-600">
+                        {invoice.type === 'income' ? 'Receita' : 'Despesa'}
+                      </td>
+                      <td className="py-3 px-4 text-gray-600">
+                        {new Date(invoice.issueDate).toLocaleDateString('pt-BR')}
+                      </td>
+                      <td className="py-3 px-4 text-gray-600">
+                        {invoice.dueDate ? new Date(invoice.dueDate).toLocaleDateString('pt-BR') : '-'}
+                      </td>
+                      <td className="py-3 px-4 text-right font-medium text-gray-900">
+                        R$ {invoice.total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      </td>
+                      <td className="py-3 px-4 text-center">
+                        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(invoice.status)}`}>
+                          {getStatusLabel(invoice.status)}
                         </span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-lg font-semibold text-gray-900">Margem por Projeto</h3>
-                    <TrendingUp className="text-blue-600" size={20} />
-                  </div>
-                  <div className="space-y-3">
-                    {mockFinancialData.map((project) => {
-                      const marginPercentage = (project.margin / project.budgetApproved) * 100;
-                      return (
-                        <div key={project.id} className="space-y-1">
-                          <div className="flex justify-between text-sm">
-                            <span className="text-gray-700 truncate">{project.projectName}</span>
-                            <span className={`font-medium ${marginPercentage >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                              {marginPercentage.toFixed(1)}%
-                            </span>
-                          </div>
-                          <div className="text-xs text-gray-500">
-                            R$ {project.margin.toLocaleString('pt-BR')}
-                          </div>
+                      </td>
+                      <td className="py-3 px-4 text-center">
+                        <div className="flex items-center justify-center gap-2">
+                          {invoice.status !== 'paid' && invoice.status !== 'cancelled' && (
+                            <button
+                              onClick={() => handleMarkInvoiceAsPaid(invoice.id)}
+                              className="text-green-600 hover:text-green-800"
+                              title="Marcar como pago"
+                            >
+                              <CheckCircle2 size={16} />
+                            </button>
+                          )}
+                          <button
+                            onClick={() => handleEditInvoice(invoice)}
+                            className="text-blue-600 hover:text-blue-800"
+                            title="Editar"
+                          >
+                            <Edit size={16} />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteInvoice(invoice.id)}
+                            className="text-red-600 hover:text-red-800"
+                            title="Excluir"
+                          >
+                            <Trash2 size={16} />
+                          </button>
                         </div>
-                      );
-                    })}
-                  </div>
-                </div>
+                      </td>
+                    </tr>
+                  ))}
+                  {invoices.length === 0 && (
+                    <tr>
+                      <td colSpan={7} className="py-8 text-center text-gray-500">
+                        Nenhuma fatura encontrada
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
 
-                <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-lg font-semibold text-gray-900">Status de Pagamentos</h3>
-                    <Clock className="text-yellow-600" size={20} />
-                  </div>
-                  <div className="space-y-3">
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm text-gray-600">Pagos</span>
-                      <span className="text-sm font-semibold text-green-600">
-                        R$ {totalPaid.toLocaleString('pt-BR')}
-                      </span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm text-gray-600">Pendentes</span>
-                      <span className="text-sm font-semibold text-yellow-600">
-                        R$ {(totalExpenses - totalPaid).toLocaleString('pt-BR')}
-                      </span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm text-gray-600">A Receber</span>
-                      <span className="text-sm font-semibold text-blue-600">
-                        R$ {totalToReceive.toLocaleString('pt-BR')}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-                <div className="flex items-center justify-between mb-6">
-                  <h3 className="text-lg font-semibold text-gray-900">Relatórios Detalhados</h3>
-                  <div className="flex space-x-2">
-                    <select className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-                      <option value="all">Todos os Projetos</option>
-                      {mockFinancialData.map(project => (
-                        <option key={project.id} value={project.id}>{project.projectName}</option>
-                      ))}
-                    </select>
-                    <select className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-                      <option value="all">Todos os Clientes</option>
-                      {mockFinancialData.map(project => (
-                        <option key={project.id} value={project.client}>{project.client}</option>
-                      ))}
-                    </select>
-                    <select className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-                      <option value="month">Último Mês</option>
-                      <option value="quarter">Último Trimestre</option>
-                      <option value="year">Último Ano</option>
-                    </select>
-                    <button className="btn-primary flex items-center">
-                      <Download size={16} className="mr-2" />
-                      Exportar
-                    </button>
-                  </div>
-                </div>
-                
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-gray-200">
-                        <th className="text-left py-3 px-4 font-medium text-gray-700">Projeto</th>
-                        <th className="text-left py-3 px-4 font-medium text-gray-700">Cliente</th>
-                        <th className="text-right py-3 px-4 font-medium text-gray-700">Budget</th>
-                        <th className="text-right py-3 px-4 font-medium text-gray-700">Gasto</th>
-                        <th className="text-right py-3 px-4 font-medium text-gray-700">Margem</th>
-                        <th className="text-center py-3 px-4 font-medium text-gray-700">Status</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {mockFinancialData.map((project) => (
-                        <tr key={project.id} className="border-b border-gray-100 hover:bg-gray-50">
-                          <td className="py-3 px-4 font-medium text-gray-900">{project.projectName}</td>
-                          <td className="py-3 px-4 text-gray-600">{project.client}</td>
-                          <td className="py-3 px-4 text-right font-medium text-gray-900">
-                            R$ {project.budgetApproved.toLocaleString('pt-BR')}
-                          </td>
-                          <td className="py-3 px-4 text-right font-medium text-gray-900">
-                            R$ {project.expensesRegistered.toLocaleString('pt-BR')}
-                          </td>
-                          <td className="py-3 px-4 text-right font-medium text-gray-900">
-                            R$ {project.margin.toLocaleString('pt-BR')}
-                          </td>
-                          <td className="py-3 px-4 text-center">
-                            <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(project.status)}`}>
-                              {project.status}
-                            </span>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
+          {activeTab === 'payments' && (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-gray-200">
+                    <th className="text-left py-3 px-4 font-medium text-gray-700">Data</th>
+                    <th className="text-left py-3 px-4 font-medium text-gray-700">Método</th>
+                    <th className="text-right py-3 px-4 font-medium text-gray-700">Valor</th>
+                    <th className="text-center py-3 px-4 font-medium text-gray-700">Status</th>
+                    <th className="text-center py-3 px-4 font-medium text-gray-700">Ações</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {payments.map((payment) => (
+                    <tr key={payment.id} className="border-b border-gray-100 hover:bg-gray-50">
+                      <td className="py-3 px-4 text-gray-600">
+                        {new Date(payment.paymentDate).toLocaleDateString('pt-BR')}
+                      </td>
+                      <td className="py-3 px-4 text-gray-600">
+                        {payment.method === 'bank_transfer' ? 'Transferência' :
+                         payment.method === 'credit_card' ? 'Cartão de Crédito' :
+                         payment.method === 'debit_card' ? 'Cartão de Débito' :
+                         payment.method === 'pix' ? 'PIX' :
+                         payment.method === 'cash' ? 'Dinheiro' :
+                         payment.method === 'check' ? 'Cheque' : payment.method}
+                      </td>
+                      <td className="py-3 px-4 text-right font-medium text-gray-900">
+                        R$ {payment.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      </td>
+                      <td className="py-3 px-4 text-center">
+                        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(payment.status)}`}>
+                          {getStatusLabel(payment.status)}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 text-center">
+                        <div className="flex items-center justify-center gap-2">
+                          {payment.status === 'pending' && (
+                            <button
+                              onClick={async () => {
+                                try {
+                                  await apiService.completePayment(payment.id);
+                                  loadData();
+                                } catch (error) {
+                                  console.error('Error completing payment:', error);
+                                  showToast.error('Erro ao completar pagamento');
+                                }
+                              }}
+                              className="text-green-600 hover:text-green-800"
+                              title="Completar"
+                            >
+                              <CheckCircle2 size={16} />
+                            </button>
+                          )}
+                          <button
+                            onClick={() => handleDeletePayment(payment.id)}
+                            className="text-red-600 hover:text-red-800"
+                            title="Excluir"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                  {payments.length === 0 && (
+                    <tr>
+                      <td colSpan={5} className="py-8 text-center text-gray-500">
+                        Nenhum pagamento encontrado
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
             </div>
           )}
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
-        <div className="bg-white p-4 sm:p-6 rounded-xl shadow-sm border border-gray-200">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Despesas por Categoria</h3>
-          <div className="space-y-3">
-            {categories.map((category, index) => (
-              <div key={category} className="flex items-center justify-between">
-                <div className="flex items-center">
-                  <div className={`w-3 h-3 rounded-full mr-3 ${
-                    ['bg-purple-500', 'bg-blue-500', 'bg-green-500', 'bg-yellow-500', 'bg-orange-500', 'bg-pink-500', 'bg-indigo-500'][index]
-                  }`}></div>
-                  <span className="text-sm text-gray-600">{category}</span>
-                </div>
-                <span className="text-sm font-medium text-gray-900">
-                  R$ {(Math.random() * 50000 + 10000).toLocaleString('pt-BR')}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="bg-white p-4 sm:p-6 rounded-xl shadow-sm border border-gray-200">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Alertas Financeiros</h3>
-          <div className="space-y-4">
-            <div className="flex items-start space-x-3 p-3 bg-red-50 rounded-lg">
-              <AlertCircle className="text-red-500 flex-shrink-0 mt-0.5" size={16} />
-              <div>
-                <p className="text-sm font-medium text-red-800">Pagamento atrasado</p>
-                <p className="text-xs text-red-600">Material promocional - 5 dias de atraso</p>
-              </div>
-            </div>
-            <div className="flex items-start space-x-3 p-3 bg-yellow-50 rounded-lg">
-              <Clock className="text-yellow-500 flex-shrink-0 mt-0.5" size={16} />
-              <div>
-                <p className="text-sm font-medium text-yellow-800">Budget próximo do limite</p>
-                <p className="text-xs text-yellow-600">Evento Corporativo Q1 - 85% utilizado</p>
-              </div>
-            </div>
-            <div className="flex items-start space-x-3 p-3 bg-green-50 rounded-lg">
-              <CheckCircle2 className="text-green-500 flex-shrink-0 mt-0.5" size={16} />
-              <div>
-                <p className="text-sm font-medium text-green-800">Projeto finalizado</p>
-                <p className="text-xs text-green-600">Workshop Digital - Margem positiva</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Modal de Upload de Nota Fiscal */}
-      {showUploadModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-2 sm:p-4">
-          <div className="bg-white rounded-xl shadow-xl max-w-md w-full">
-            <div className="p-4 sm:p-6">
-              <div className="flex items-center justify-between mb-4 sm:mb-6">
-                <h2 className="text-lg sm:text-xl font-semibold text-gray-900">Upload de Nota Fiscal</h2>
-                <button
-                  onClick={() => setShowUploadModal(false)}
-                  className="text-gray-400 hover:text-gray-600 p-1"
-                >
-                  <X size={20} />
-                </button>
-              </div>
-              
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Selecionar Arquivo</label>
-                  <input
-                    type="file"
-                    accept=".pdf,.jpg,.jpeg,.png"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Projeto</label>
-                  <select className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-                    <option value="">Selecione um projeto</option>
-                    <option value="1">Evento Corporativo Q1</option>
-                    <option value="2">Lançamento Produto</option>
-                    <option value="3">Workshop Digital</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Número da Nota</label>
-                  <input
-                    type="text"
-                    placeholder="Ex: NF-001234"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                </div>
-              </div>
-              
-              <div className="flex flex-col sm:flex-row justify-end space-y-2 sm:space-y-0 sm:space-x-3 mt-6">
-                <button
-                  onClick={() => setShowUploadModal(false)}
-                  className="btn-secondary w-full sm:w-auto"
-                >
-                  Cancelar
-                </button>
+      {showExpenseModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[95vh] overflow-y-auto">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-semibold text-gray-900">
+                  {editingExpense ? 'Editar Despesa' : 'Nova Despesa'}
+                </h2>
                 <button
                   onClick={() => {
-                    console.log('Upload realizado');
-                    setShowUploadModal(false);
+                    setShowExpenseModal(false);
+                    setEditingExpense(null);
                   }}
-                  className="btn-success w-full sm:w-auto"
-                >
-                  Upload
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Modal de Nova Despesa */}
-      {showExpenseModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-2 sm:p-4">
-          <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[95vh] overflow-y-auto">
-            <div className="p-4 sm:p-6">
-              <div className="flex items-center justify-between mb-4 sm:mb-6">
-                <h2 className="text-lg sm:text-xl font-semibold text-gray-900">Nova Despesa</h2>
-                <button
-                  onClick={() => setShowExpenseModal(false)}
-                  className="text-gray-400 hover:text-gray-600 p-1"
+                  className="text-gray-400 hover:text-gray-600"
                 >
                   <X size={20} />
                 </button>
@@ -862,26 +827,53 @@ export default function Financeiro() {
                     <select
                       value={newExpense.projectId}
                       onChange={(e) => setNewExpense({...newExpense, projectId: e.target.value})}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                     >
                       <option value="">Selecione um projeto</option>
-                      <option value="1">Evento Corporativo Q1</option>
-                      <option value="2">Lançamento Produto</option>
-                      <option value="3">Workshop Digital</option>
+                      {projects.map(project => (
+                        <option key={project.id} value={project.id}>{project.name}</option>
+                      ))}
                     </select>
                   </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Fornecedor</label>
+                    <select
+                      value={newExpense.supplierId}
+                      onChange={(e) => setNewExpense({...newExpense, supplierId: e.target.value})}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="">Selecione um fornecedor</option>
+                      {suppliers.map(supplier => (
+                        <option key={supplier.id} value={supplier.id}>{supplier.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Categoria</label>
                     <select
                       value={newExpense.category}
                       onChange={(e) => setNewExpense({...newExpense, category: e.target.value})}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                     >
                       <option value="">Selecione uma categoria</option>
                       {categories.map(category => (
                         <option key={category} value={category}>{category}</option>
                       ))}
                     </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Valor</label>
+                    <input
+                      type="number"
+                      value={newExpense.amount}
+                      onChange={(e) => setNewExpense({...newExpense, amount: e.target.value})}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                      placeholder="0.00"
+                      step="0.01"
+                    />
                   </div>
                 </div>
                 
@@ -891,58 +883,60 @@ export default function Financeiro() {
                     type="text"
                     value={newExpense.description}
                     onChange={(e) => setNewExpense({...newExpense, description: e.target.value})}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="Ex: Material promocional"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    placeholder="Descrição da despesa"
                   />
                 </div>
                 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Valor</label>
-                    <input
-                      type="number"
-                      value={newExpense.value}
-                      onChange={(e) => setNewExpense({...newExpense, value: e.target.value})}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      placeholder="0.00"
-                      step="0.01"
-                    />
-                  </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Data</label>
                     <input
                       type="date"
                       value={newExpense.date}
                       onChange={(e) => setNewExpense({...newExpense, date: e.target.value})}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Número da Nota</label>
+                    <input
+                      type="text"
+                      value={newExpense.invoiceNumber}
+                      onChange={(e) => setNewExpense({...newExpense, invoiceNumber: e.target.value})}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                      placeholder="NF-001234"
                     />
                   </div>
                 </div>
                 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Número da Nota</label>
-                  <input
-                    type="text"
-                    value={newExpense.invoice}
-                    onChange={(e) => setNewExpense({...newExpense, invoice: e.target.value})}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="Ex: NF-001234"
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Observações</label>
+                  <textarea
+                    value={newExpense.notes}
+                    onChange={(e) => setNewExpense({...newExpense, notes: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    rows={3}
+                    placeholder="Observações adicionais"
                   />
                 </div>
               </div>
               
-              <div className="flex flex-col sm:flex-row justify-end space-y-2 sm:space-y-0 sm:space-x-3 mt-6">
+              <div className="flex justify-end space-x-3 mt-6">
                 <button
-                  onClick={() => setShowExpenseModal(false)}
-                  className="btn-secondary w-full sm:w-auto"
+                  onClick={() => {
+                    setShowExpenseModal(false);
+                    setEditingExpense(null);
+                  }}
+                  className="btn-secondary"
                 >
                   Cancelar
                 </button>
                 <button
                   onClick={handleSaveExpense}
-                  className="btn-primary w-full sm:w-auto"
+                  className="btn-primary"
                 >
-                  Salvar Despesa
+                  Salvar
                 </button>
               </div>
             </div>
@@ -950,65 +944,187 @@ export default function Financeiro() {
         </div>
       )}
 
-      {/* Modal de Exportação */}
-      {showExportModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-2 sm:p-4">
-          <div className="bg-white rounded-xl shadow-xl max-w-md w-full">
-            <div className="p-4 sm:p-6">
-              <div className="flex items-center justify-between mb-4 sm:mb-6">
-                <h2 className="text-lg sm:text-xl font-semibold text-gray-900">Exportar Dados</h2>
+      {showInvoiceModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[95vh] overflow-y-auto">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-semibold text-gray-900">
+                  {editingInvoice ? 'Editar Fatura' : 'Nova Fatura'}
+                </h2>
                 <button
-                  onClick={() => setShowExportModal(false)}
-                  className="text-gray-400 hover:text-gray-600 p-1"
+                  onClick={() => {
+                    setShowInvoiceModal(false);
+                    setEditingInvoice(null);
+                  }}
+                  className="text-gray-400 hover:text-gray-600"
                 >
                   <X size={20} />
                 </button>
               </div>
               
               <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Formato</label>
-                  <select className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-                    <option value="excel">Excel (.xlsx)</option>
-                    <option value="pdf">PDF</option>
-                    <option value="csv">CSV</option>
-                  </select>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Tipo</label>
+                    <select
+                      value={newInvoice.type}
+                      onChange={(e) => setNewInvoice({...newInvoice, type: e.target.value})}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="income">Receita</option>
+                      <option value="expense">Despesa</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Número da Fatura</label>
+                    <input
+                      type="text"
+                      value={newInvoice.invoiceNumber}
+                      onChange={(e) => setNewInvoice({...newInvoice, invoiceNumber: e.target.value})}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                      placeholder="NF-001234"
+                    />
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Período</label>
-                  <select className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-                    <option value="all">Todos os dados</option>
-                    <option value="month">Último mês</option>
-                    <option value="quarter">Último trimestre</option>
-                    <option value="year">Último ano</option>
-                  </select>
+                
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      {newInvoice.type === 'income' ? 'Cliente' : 'Fornecedor'}
+                    </label>
+                    <select
+                      value={newInvoice.type === 'income' ? newInvoice.clientId : newInvoice.supplierId}
+                      onChange={(e) => {
+                        if (newInvoice.type === 'income') {
+                          setNewInvoice({...newInvoice, clientId: e.target.value});
+                        } else {
+                          setNewInvoice({...newInvoice, supplierId: e.target.value});
+                        }
+                      }}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="">Selecione</option>
+                      {newInvoice.type === 'income' ? (
+                        clients.map(client => (
+                          <option key={client.id} value={client.id}>{client.name}</option>
+                        ))
+                      ) : (
+                        suppliers.map(supplier => (
+                          <option key={supplier.id} value={supplier.id}>{supplier.name}</option>
+                        ))
+                      )}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Projeto</label>
+                    <select
+                      value={newInvoice.projectId}
+                      onChange={(e) => setNewInvoice({...newInvoice, projectId: e.target.value})}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="">Selecione um projeto</option>
+                      {projects.map(project => (
+                        <option key={project.id} value={project.id}>{project.name}</option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
+                
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Valor</label>
+                    <input
+                      type="number"
+                      value={newInvoice.amount}
+                      onChange={(e) => {
+                        const amount = e.target.value;
+                        const tax = parseFloat(newInvoice.tax || '0');
+                        const total = (parseFloat(amount || '0') + tax).toString();
+                        setNewInvoice({...newInvoice, amount, total});
+                      }}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                      placeholder="0.00"
+                      step="0.01"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Imposto</label>
+                    <input
+                      type="number"
+                      value={newInvoice.tax}
+                      onChange={(e) => {
+                        const tax = e.target.value;
+                        const amount = parseFloat(newInvoice.amount || '0');
+                        const total = (amount + parseFloat(tax || '0')).toString();
+                        setNewInvoice({...newInvoice, tax, total});
+                      }}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                      placeholder="0.00"
+                      step="0.01"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Total</label>
+                    <input
+                      type="number"
+                      value={newInvoice.total}
+                      onChange={(e) => setNewInvoice({...newInvoice, total: e.target.value})}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                      placeholder="0.00"
+                      step="0.01"
+                    />
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Data de Emissão</label>
+                    <input
+                      type="date"
+                      value={newInvoice.issueDate}
+                      onChange={(e) => setNewInvoice({...newInvoice, issueDate: e.target.value})}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Data de Vencimento</label>
+                    <input
+                      type="date"
+                      value={newInvoice.dueDate}
+                      onChange={(e) => setNewInvoice({...newInvoice, dueDate: e.target.value})}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                </div>
+                
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Projeto</label>
-                  <select className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-                    <option value="all">Todos os projetos</option>
-                    <option value="1">Evento Corporativo Q1</option>
-                    <option value="2">Lançamento Produto</option>
-                    <option value="3">Workshop Digital</option>
-                  </select>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Observações</label>
+                  <textarea
+                    value={newInvoice.notes}
+                    onChange={(e) => setNewInvoice({...newInvoice, notes: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    rows={3}
+                    placeholder="Observações adicionais"
+                  />
                 </div>
               </div>
               
-              <div className="flex flex-col sm:flex-row justify-end space-y-2 sm:space-y-0 sm:space-x-3 mt-6">
+              <div className="flex justify-end space-x-3 mt-6">
                 <button
-                  onClick={() => setShowExportModal(false)}
-                  className="btn-secondary w-full sm:w-auto"
+                  onClick={() => {
+                    setShowInvoiceModal(false);
+                    setEditingInvoice(null);
+                  }}
+                  className="btn-secondary"
                 >
                   Cancelar
                 </button>
                 <button
-                  onClick={() => {
-                    console.log('Exportação realizada');
-                    setShowExportModal(false);
-                  }}
-                  className="btn-primary w-full sm:w-auto"
+                  onClick={handleSaveInvoice}
+                  className="btn-primary"
                 >
-                  Exportar
+                  Salvar
                 </button>
               </div>
             </div>

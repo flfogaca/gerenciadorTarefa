@@ -26,160 +26,10 @@ import {
   Phone,
   MapPin
 } from 'lucide-react';
+import apiService from '../services/api';
+import { showToast, showConfirm } from '../utils/toast';
+import { useWebSocket } from '../hooks/useWebSocket';
 
-const mockTaskDetails = {
-  1: {
-    id: 1,
-    code: 'TSK-001',
-    title: 'Criar identidade visual para evento corporativo',
-    description: 'Desenvolver identidade visual completa incluindo logo, cores, tipografia e aplicações para o evento corporativo da TechCorp Brasil.',
-    status: 'Em andamento',
-    priority: 'Alta',
-    assignee: {
-      id: 1,
-      name: 'João Santos',
-      avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=32&h=32&fit=crop&crop=face'
-    },
-    project: 'Evento Corporativo Q1',
-    client: 'TechCorp Brasil',
-    createdAt: '2025-01-15',
-    dueDate: '2025-02-15',
-    estimatedHours: 40,
-    loggedHours: 25,
-    tags: ['Design', 'Identidade Visual', 'Evento'],
-    watchers: [
-      {
-        id: 1,
-        name: 'Maria Silva',
-        avatar: 'https://images.unsplash.com/photo-1494790108755-2616b612b786?w=32&h=32&fit=crop&crop=face',
-        role: 'Gestor',
-        email: 'maria@gestorpro.com',
-        phone: '(11) 99999-9999'
-      },
-      {
-        id: 2,
-        name: 'Carlos Lima',
-        avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=32&h=32&fit=crop&crop=face',
-        role: 'Cliente',
-        email: 'carlos@techcorp.com',
-        phone: '(11) 88888-8888'
-      }
-    ],
-    attachments: [
-      {
-        id: 1,
-        name: 'briefing_evento.pdf',
-        type: 'pdf',
-        size: '2.4 MB',
-        uploadedAt: '2025-01-15',
-        uploadedBy: 'Maria Silva'
-      },
-      {
-        id: 2,
-        name: 'referencias_cores.ai',
-        type: 'ai',
-        size: '15.2 MB',
-        uploadedAt: '2025-01-16',
-        uploadedBy: 'João Santos'
-      },
-      {
-        id: 3,
-        name: 'logo_conceito.png',
-        type: 'png',
-        size: '1.8 MB',
-        uploadedAt: '2025-01-17',
-        uploadedBy: 'João Santos'
-      }
-    ],
-    history: [
-      {
-        id: 1,
-        action: 'Tarefa criada',
-        user: 'Maria Silva',
-        timestamp: '2025-01-15T09:00:00',
-        details: 'Tarefa criada e atribuída a João Santos'
-      },
-      {
-        id: 2,
-        action: 'Status alterado',
-        user: 'João Santos',
-        timestamp: '2025-01-15T10:30:00',
-        details: 'Status alterado de "Pendente" para "Em andamento"'
-      },
-      {
-        id: 3,
-        action: 'Arquivo anexado',
-        user: 'João Santos',
-        timestamp: '2025-01-16T14:20:00',
-        details: 'Anexado arquivo: referencias_cores.ai'
-      },
-      {
-        id: 4,
-        action: 'Comentário adicionado',
-        user: 'Maria Silva',
-        timestamp: '2025-01-17T11:15:00',
-        details: 'Ótimo trabalho com as referências de cores!'
-      }
-    ],
-    comments: [
-      {
-        id: 1,
-        user: 'Maria Silva',
-        avatar: 'https://images.unsplash.com/photo-1494790108755-2616b612b786?w=32&h=32&fit=crop&crop=face',
-        message: 'Ótimo trabalho com as referências de cores! Podemos seguir com essa paleta.',
-        timestamp: '2025-01-17T11:15:00'
-      },
-      {
-        id: 2,
-        user: 'João Santos',
-        avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=32&h=32&fit=crop&crop=face',
-        message: 'Obrigado! Vou finalizar o logo hoje mesmo.',
-        timestamp: '2025-01-17T11:45:00'
-      }
-    ]
-  },
-  2: {
-    id: 2,
-    code: 'TSK-002',
-    title: 'Desenvolver apresentação executiva',
-    description: 'Criar apresentação executiva para o lançamento do novo produto da Inovação Ltda.',
-    status: 'Pendente',
-    priority: 'Média',
-    assignee: {
-      id: 2,
-      name: 'Ana Costa',
-      avatar: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=32&h=32&fit=crop&crop=face'
-    },
-    project: 'Lançamento Produto',
-    client: 'Inovação Ltda',
-    createdAt: '2025-01-20',
-    dueDate: '2025-02-20',
-    estimatedHours: 20,
-    loggedHours: 0,
-    tags: ['Apresentação', 'Executivo', 'Lançamento'],
-    watchers: [
-      {
-        id: 3,
-        name: 'Ana Costa',
-        avatar: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=32&h=32&fit=crop&crop=face',
-        role: 'Diretor',
-        email: 'ana@inovacao.com',
-        phone: '(11) 77777-7777'
-      }
-    ],
-    attachments: [],
-    history: [
-      {
-        id: 1,
-        action: 'Tarefa criada',
-        user: 'Carlos Lima',
-        timestamp: '2025-01-20T14:00:00',
-        details: 'Tarefa criada e atribuída a Ana Costa'
-      }
-    ],
-    comments: []
-  }
-};
 
 const getStatusColor = (status: string) => {
   switch (status) {
@@ -220,7 +70,9 @@ const getFileIcon = (type: string) => {
 export default function TaskDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const [task, setTask] = useState(mockTaskDetails[parseInt(id || '1')]);
+  const [task, setTask] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [users, setUsers] = useState<any[]>([]);
   const [isEditing, setIsEditing] = useState(false);
   const [activeTab, setActiveTab] = useState<'overview' | 'tags' | 'attachments' | 'people'>('overview');
   const [editData, setEditData] = useState({
@@ -236,6 +88,112 @@ export default function TaskDetail() {
   const [timerSeconds, setTimerSeconds] = useState(0);
   const [newTag, setNewTag] = useState('');
   const [newWatcher, setNewWatcher] = useState('');
+  const [timeLogHours, setTimeLogHours] = useState('');
+  const [timeLogDescription, setTimeLogDescription] = useState('');
+  const [showReassignModal, setShowReassignModal] = useState(false);
+  const [newAssigneeId, setNewAssigneeId] = useState('');
+
+  useWebSocket();
+
+  useEffect(() => {
+    if (id) {
+      loadTask();
+      loadUsers();
+    }
+
+    const handleTaskUpdate = (event: CustomEvent) => {
+      const updatedTask = event.detail;
+      if (updatedTask?.id === id) {
+        loadTask();
+        showToast.info('Tarefa foi atualizada');
+      }
+    };
+
+    window.addEventListener('websocket:task:updated', handleTaskUpdate as EventListener);
+
+    return () => {
+      window.removeEventListener('websocket:task:updated', handleTaskUpdate as EventListener);
+    };
+  }, [id]);
+
+  const loadTask = async () => {
+    try {
+      setIsLoading(true);
+      const response = await apiService.getTask(id!);
+      const taskData = response.data?.task || response.data;
+      
+      if (taskData) {
+        const mappedTask = {
+          id: taskData.id,
+          code: taskData.code || `TSK-${taskData.id}`,
+          title: taskData.title || taskData.name,
+          description: taskData.description || '',
+          status: mapTaskStatus(taskData.status),
+          priority: mapTaskPriority(taskData.priority),
+          assignee: taskData.assignee || taskData.assignedTo || { id: '', name: 'Não atribuído' },
+          project: taskData.project?.name || taskData.projectName || '',
+          client: taskData.project?.clientName || taskData.client || '',
+          createdAt: taskData.createdAt || taskData.createdDate || '',
+          dueDate: taskData.dueDate || taskData.endDate || '',
+          estimatedHours: taskData.estimatedHours || 0,
+          loggedHours: taskData.loggedHours || taskData.completedHours || 0,
+          tags: taskData.tags || [],
+          watchers: taskData.watchers || [],
+          attachments: taskData.attachments || [],
+          history: taskData.history || [],
+          comments: taskData.comments || []
+        };
+        setTask(mappedTask);
+        setEditData({
+          title: mappedTask.title,
+          description: mappedTask.description,
+          status: mappedTask.status,
+          priority: mappedTask.priority,
+          dueDate: mappedTask.dueDate,
+          estimatedHours: mappedTask.estimatedHours
+        });
+      }
+    } catch (error) {
+      console.error('Error loading task:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const loadUsers = async () => {
+    try {
+      const response = await apiService.getUsers();
+      const usersData = response.data?.users || response.data || [];
+      setUsers(usersData);
+    } catch (error) {
+      console.error('Error loading users:', error);
+    }
+  };
+
+  const mapTaskStatus = (status: string) => {
+    const statusMap: Record<string, string> = {
+      'pending': 'Pendente',
+      'in_progress': 'Em andamento',
+      'completed': 'Concluído',
+      'cancelled': 'Cancelado',
+      'Pendente': 'Pendente',
+      'Em andamento': 'Em andamento',
+      'Concluído': 'Concluído'
+    };
+    return statusMap[status] || status || 'Pendente';
+  };
+
+  const mapTaskPriority = (priority: string) => {
+    const priorityMap: Record<string, string> = {
+      'high': 'Alta',
+      'medium': 'Média',
+      'low': 'Baixa',
+      'Alta': 'Alta',
+      'Média': 'Média',
+      'Baixa': 'Baixa'
+    };
+    return priorityMap[priority] || priority || 'Média';
+  };
 
   useEffect(() => {
     if (task) {
@@ -271,10 +229,36 @@ export default function TaskDetail() {
     setIsEditing(true);
   };
 
-  const handleSave = () => {
-    console.log('Salvando alterações:', editData);
-    setTask(prev => prev ? { ...prev, ...editData } : null);
-    setIsEditing(false);
+  const handleSave = async () => {
+    if (!id) return;
+    try {
+      const statusMap: Record<string, string> = {
+        'Pendente': 'pending',
+        'Em andamento': 'in_progress',
+        'Concluído': 'completed',
+        'Cancelado': 'cancelled'
+      };
+
+      const priorityMap: Record<string, string> = {
+        'Alta': 'high',
+        'Média': 'medium',
+        'Baixa': 'low'
+      };
+
+      await apiService.updateTask(id, {
+        title: editData.title,
+        description: editData.description,
+        status: statusMap[editData.status] || editData.status,
+        priority: priorityMap[editData.priority] || editData.priority,
+        dueDate: editData.dueDate,
+        estimatedHours: editData.estimatedHours
+      });
+      
+      await loadTask();
+      setIsEditing(false);
+    } catch (error) {
+      console.error('Error updating task:', error);
+    }
   };
 
   const handleCancel = () => {
@@ -289,22 +273,128 @@ export default function TaskDetail() {
     setIsEditing(false);
   };
 
-  const handleStatusChange = (newStatus: string) => {
-    console.log('Alterando status para:', newStatus);
-    setTask(prev => prev ? { ...prev, status: newStatus } : null);
-  };
-
-  const handleAddComment = () => {
-    if (newComment.trim()) {
-      console.log('Adicionando comentário:', newComment);
-      setNewComment('');
+  const handleStatusChange = async (newStatus: string) => {
+    if (!id) return;
+    try {
+      const statusMap: Record<string, string> = {
+        'Pendente': 'TODO',
+        'Em andamento': 'IN_PROGRESS',
+        'Concluído': 'DONE',
+        'Cancelado': 'CANCELLED',
+        'A Iniciar': 'TODO',
+        'Em Andamento': 'IN_PROGRESS',
+        'TODO': 'TODO',
+        'IN_PROGRESS': 'IN_PROGRESS',
+        'DONE': 'DONE',
+        'REVIEW': 'REVIEW',
+        'CANCELLED': 'CANCELLED'
+      };
+      await apiService.changeTaskStatus(id, statusMap[newStatus] || newStatus);
+      await loadTask();
+    } catch (error: any) {
+      console.error('Error changing task status:', error);
+      const message = error.response?.data?.message || error.message || 'Erro ao alterar status da tarefa';
+      showToast.error(`Erro ao alterar status: ${message}`);
     }
   };
 
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleReassign = async () => {
+    if (!id || !newAssigneeId) return;
+    try {
+      await apiService.reassignTask(id, newAssigneeId);
+      await loadTask();
+      setShowReassignModal(false);
+      setNewAssigneeId('');
+    } catch (error: any) {
+      console.error('Error reassigning task:', error);
+      const message = error.response?.data?.message || error.message || 'Erro ao reatribuir tarefa';
+      showToast.error(`Erro ao reatribuir tarefa: ${message}`);
+    }
+  };
+
+  const handleLogTime = async () => {
+    if (!id || !timeLogHours || parseFloat(timeLogHours) <= 0) return;
+    try {
+      await apiService.logTime(id, {
+        duration: parseFloat(timeLogHours) * 3600,
+        description: timeLogDescription || 'Tempo trabalhado'
+      });
+      setTimeLogHours('');
+      setTimeLogDescription('');
+      await loadTask();
+    } catch (error: any) {
+      console.error('Error logging time:', error);
+      const message = error.response?.data?.message || error.message || 'Erro ao registrar tempo';
+      showToast.error(`Erro ao registrar tempo: ${message}`);
+    }
+  };
+
+  const handleTimerStop = async () => {
+    if (timerSeconds > 0 && id) {
+      const hours = timerSeconds / 3600;
+      try {
+        await apiService.logTime(id, {
+          duration: timerSeconds,
+          description: 'Tempo registrado via timer',
+          date: new Date().toISOString()
+        });
+        await loadTask();
+      } catch (error) {
+        console.error('Error logging time:', error);
+        showToast.error('Erro ao registrar tempo');
+      }
+    }
+    setIsTimerRunning(false);
+    setTimerSeconds(0);
+  };
+
+  const handleAddComment = async () => {
+    if (!id || !newComment.trim()) return;
+    try {
+      const currentUser = await apiService.getCurrentUser();
+      await apiService.addTaskComment(id, {
+        content: newComment,
+        userId: currentUser?.id || currentUser?.userId || ''
+      });
+      setNewComment('');
+      await loadTask();
+    } catch (error: any) {
+      console.error('Error adding comment:', error);
+      showToast.error('Erro ao adicionar comentário');
+    }
+  };
+
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
-    if (files) {
-      console.log('Upload de arquivos:', files);
+    if (!id || !files || files.length === 0) return;
+    
+    try {
+      const formData = new FormData();
+      Array.from(files).forEach(file => {
+        formData.append('files', file);
+      });
+      
+      await apiService.uploadTaskFiles(id, formData);
+      await loadTask();
+      showToast.success('Arquivos enviados com sucesso!');
+    } catch (error: any) {
+      console.error('Error uploading files:', error);
+      showToast.error('Erro ao enviar arquivos');
+    }
+  };
+
+  const handleDeleteFile = async (fileId: string) => {
+    if (!id || !fileId) return;
+    const confirmed = await showConfirm('Tem certeza que deseja excluir este arquivo?');
+    if (!confirmed) return;
+    
+    try {
+      await apiService.deleteTaskFile(id, fileId);
+      await loadTask();
+      showToast.success('Arquivo excluído com sucesso!');
+    } catch (error: any) {
+      console.error('Error deleting file:', error);
+      showToast.error('Erro ao excluir arquivo');
     }
   };
 
@@ -312,32 +402,82 @@ export default function TaskDetail() {
     setIsTimerRunning(!isTimerRunning);
   };
 
-  const handleTimerStop = () => {
-    setIsTimerRunning(false);
-    setTimerSeconds(0);
-  };
-
-  const handleAddTag = () => {
-    if (newTag.trim() && !task?.tags.includes(newTag.trim())) {
-      console.log('Adicionando tag:', newTag);
+  const handleAddTag = async () => {
+    if (!id || !newTag.trim() || task?.tags.includes(newTag.trim())) return;
+    try {
+      const updatedTags = [...(task?.tags || []), newTag.trim()];
+      await apiService.updateTask(id, { tags: updatedTags });
       setNewTag('');
+      await loadTask();
+    } catch (error: any) {
+      console.error('Error adding tag:', error);
+      showToast.error('Erro ao adicionar tag');
     }
   };
 
-  const handleRemoveTag = (tagToRemove: string) => {
-    console.log('Removendo tag:', tagToRemove);
+  const handleRemoveTag = async (tagToRemove: string) => {
+    if (!id) return;
+    try {
+      const updatedTags = (task?.tags || []).filter((tag: string) => tag !== tagToRemove);
+      await apiService.updateTask(id, { tags: updatedTags });
+      await loadTask();
+    } catch (error: any) {
+      console.error('Error removing tag:', error);
+      showToast.error('Erro ao remover tag');
+    }
   };
 
-  const handleAddWatcher = () => {
-    if (newWatcher.trim()) {
-      console.log('Adicionando observador:', newWatcher);
+  const handleAddWatcher = async () => {
+    if (!id || !newWatcher.trim()) return;
+    try {
+      const watcherUser = users.find((u: any) => 
+        u.name?.toLowerCase().includes(newWatcher.toLowerCase()) ||
+        u.email?.toLowerCase().includes(newWatcher.toLowerCase())
+      );
+      
+      if (!watcherUser) {
+        showToast.error('Usuário não encontrado');
+        return;
+      }
+      
+      const updatedWatchers = [...(task?.watchers || []), {
+        id: watcherUser.id,
+        name: watcherUser.name,
+        email: watcherUser.email,
+        role: watcherUser.role
+      }];
+      
+      await apiService.updateTask(id, { watchers: updatedWatchers });
       setNewWatcher('');
+      await loadTask();
+    } catch (error: any) {
+      console.error('Error adding watcher:', error);
+      showToast.error('Erro ao adicionar observador');
     }
   };
 
-  const handleRemoveWatcher = (watcherId: number) => {
-    console.log('Removendo observador:', watcherId);
+  const handleRemoveWatcher = async (watcherId: number) => {
+    if (!id) return;
+    try {
+      const updatedWatchers = (task?.watchers || []).filter((w: any) => w.id !== watcherId);
+      await apiService.updateTask(id, { watchers: updatedWatchers });
+      await loadTask();
+    } catch (error: any) {
+      console.error('Error removing watcher:', error);
+      showToast.error('Erro ao remover observador');
+    }
   };
+
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <div className="animate-pulse">
+          <div className="h-8 bg-gray-200 rounded w-1/4 mb-4"></div>
+          <div className="h-96 bg-gray-200 rounded"></div>
+        </div>
+      </div>
+    );
+  }
 
   if (!task) {
     return (
@@ -678,7 +818,11 @@ export default function TaskDetail() {
                     <button className="text-green-600 hover:text-green-800 p-1">
                       <Download size={16} />
                     </button>
-                    <button className="text-red-600 hover:text-red-800 p-1">
+                    <button 
+                      onClick={() => handleDeleteFile(attachment.id)}
+                      className="text-red-600 hover:text-red-800 p-1"
+                      title="Excluir arquivo"
+                    >
                       <Trash2 size={16} />
                     </button>
                   </div>
@@ -793,21 +937,102 @@ export default function TaskDetail() {
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
             <h2 className="text-lg font-semibold text-gray-900 mb-4">Histórico</h2>
             <div className="space-y-3">
-              {task.history.map((item) => (
-                <div key={item.id} className="flex space-x-3">
-                  <div className="flex-shrink-0">
-                    <div className="w-2 h-2 bg-blue-500 rounded-full mt-2"></div>
+              {task.history && task.history.length > 0 ? (
+                task.history.map((item: any, index: number) => (
+                  <div key={item.id || index} className="flex space-x-3">
+                    <div className="flex-shrink-0">
+                      <div className="w-2 h-2 bg-blue-500 rounded-full mt-2"></div>
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-gray-900">{item.action}</p>
+                      <p className="text-xs text-gray-600">{item.user}</p>
+                      <p className="text-xs text-gray-500">{new Date(item.timestamp).toLocaleString('pt-BR')}</p>
+                      {item.details && (
+                        <p className="text-xs text-gray-600 mt-1">{item.details}</p>
+                      )}
+                    </div>
                   </div>
-                  <div className="flex-1">
-                    <p className="text-sm font-medium text-gray-900">{item.action}</p>
-                    <p className="text-xs text-gray-600">{item.user}</p>
-                    <p className="text-xs text-gray-500">{new Date(item.timestamp).toLocaleString('pt-BR')}</p>
-                    {item.details && (
-                      <p className="text-xs text-gray-600 mt-1">{item.details}</p>
-                    )}
-                  </div>
+                ))
+              ) : (
+                <p className="text-gray-500 text-sm">Nenhum histórico disponível</p>
+              )}
+            </div>
+          </div>
+
+          {/* Registro de Tempo */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">Registro de Tempo</h2>
+            <div className="space-y-4">
+              <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                <div>
+                  <p className="text-sm font-medium text-gray-900">Timer</p>
+                  <p className="text-2xl font-bold text-gray-900 mt-1">{formatTime(timerSeconds)}</p>
                 </div>
-              ))}
+                <div className="flex gap-2">
+                  {isTimerRunning ? (
+                    <>
+                      <button
+                        onClick={() => setIsTimerRunning(false)}
+                        className="px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 flex items-center"
+                      >
+                        <Pause size={16} className="mr-2" />
+                        Pausar
+                      </button>
+                      <button
+                        onClick={handleTimerStop}
+                        className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 flex items-center"
+                      >
+                        <Square size={16} className="mr-2" />
+                        Parar
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      onClick={handleTimerToggle}
+                      className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center"
+                    >
+                      <Play size={16} className="mr-2" />
+                      Iniciar Timer
+                    </button>
+                  )}
+                </div>
+              </div>
+              
+              <div className="border-t pt-4">
+                <h3 className="text-sm font-medium text-gray-700 mb-3">Registrar Tempo Manualmente</h3>
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Horas</label>
+                    <input
+                      type="number"
+                      step="0.25"
+                      min="0"
+                      value={timeLogHours}
+                      onChange={(e) => setTimeLogHours(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="0.00"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Descrição</label>
+                    <textarea
+                      value={timeLogDescription}
+                      onChange={(e) => setTimeLogDescription(e.target.value)}
+                      rows={2}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="Descreva o trabalho realizado..."
+                    />
+                  </div>
+                  <button
+                    onClick={handleLogTime}
+                    disabled={!timeLogHours || parseFloat(timeLogHours) <= 0}
+                    className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+                  >
+                    <Clock size={16} className="mr-2" />
+                    Registrar Tempo
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -948,6 +1173,13 @@ export default function TaskDetail() {
                     <p className="text-sm text-gray-600">Responsável pela tarefa</p>
                   </div>
                   <div className="flex items-center space-x-2">
+                    <button 
+                      onClick={() => setShowReassignModal(true)}
+                      className="text-blue-600 hover:text-blue-800 p-1"
+                      title="Reatribuir tarefa"
+                    >
+                      <Users size={16} />
+                    </button>
                     <button className="text-blue-600 hover:text-blue-800 p-1">
                       <Mail size={16} />
                     </button>
@@ -999,6 +1231,59 @@ export default function TaskDetail() {
           )}
         </div>
       </div>
+
+      {showReassignModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-semibold text-gray-900">Reatribuir Tarefa</h2>
+                <button
+                  onClick={() => setShowReassignModal(false)}
+                  className="p-2 text-gray-400 hover:text-gray-600"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Novo Responsável
+                  </label>
+                  <select
+                    value={newAssigneeId}
+                    onChange={(e) => setNewAssigneeId(e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    <option value="">Selecione um usuário</option>
+                    {users.map((user) => (
+                      <option key={user.id} value={user.id}>
+                        {user.name || user.fullName || user.email}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex justify-end gap-3">
+                  <button
+                    onClick={() => setShowReassignModal(false)}
+                    className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={handleReassign}
+                    disabled={!newAssigneeId}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Reatribuir
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

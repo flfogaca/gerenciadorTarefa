@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { 
   Bell, 
   CheckCircle2, 
@@ -14,148 +14,174 @@ import {
   Search,
   Settings
 } from 'lucide-react';
+import apiService from '../services/api';
 
-const mockNotifications = [
-  {
-    id: 1,
-    type: 'deadline',
-    title: 'Prazo próximo',
-    message: 'O projeto "Evento Corporativo Q1" tem prazo de entrega em 3 dias',
-    project: 'Evento Corporativo Q1',
-    time: '2 horas atrás',
-    isRead: false,
-    priority: 'high',
-    icon: AlertCircle,
-    color: 'text-red-600',
-    bgColor: 'bg-red-50'
-  },
-  {
-    id: 2,
-    type: 'project_update',
-    title: 'Projeto atualizado',
-    message: 'Maria Silva atualizou o status do projeto "Lançamento Produto"',
-    project: 'Lançamento Produto',
-    time: '4 horas atrás',
-    isRead: false,
-    priority: 'medium',
-    icon: CheckCircle2,
-    color: 'text-blue-600',
-    bgColor: 'bg-blue-50'
-  },
-  {
-    id: 3,
-    type: 'team_mention',
-    title: 'Você foi mencionado',
-    message: 'João Santos mencionou você em uma tarefa do projeto "Workshop Digital"',
-    project: 'Workshop Digital',
-    time: '1 dia atrás',
-    isRead: true,
-    priority: 'medium',
-    icon: Users,
-    color: 'text-purple-600',
-    bgColor: 'bg-purple-50'
-  },
-  {
-    id: 4,
-    type: 'financial',
-    title: 'Alerta financeiro',
-    message: 'O projeto "Conferência Anual" está próximo do limite de orçamento',
-    project: 'Conferência Anual',
-    time: '2 dias atrás',
-    isRead: true,
-    priority: 'high',
-    icon: DollarSign,
-    color: 'text-orange-600',
-    bgColor: 'bg-orange-50'
-  },
-  {
-    id: 5,
-    type: 'task_completed',
-    title: 'Tarefa concluída',
-    message: 'Ana Costa concluiu a tarefa "Design System" no projeto "Evento Corporativo Q1"',
-    project: 'Evento Corporativo Q1',
-    time: '3 dias atrás',
-    isRead: true,
-    priority: 'low',
-    icon: CheckCircle2,
-    color: 'text-green-600',
-    bgColor: 'bg-green-50'
-  },
-  {
-    id: 6,
-    type: 'schedule',
-    title: 'Reunião agendada',
-    message: 'Reunião de planejamento agendada para amanhã às 14:00',
-    project: 'Lançamento Produto',
-    time: '4 dias atrás',
-    isRead: true,
-    priority: 'medium',
-    icon: Calendar,
-    color: 'text-indigo-600',
-    bgColor: 'bg-indigo-50'
-  },
-  {
-    id: 7,
-    type: 'document',
-    title: 'Novo documento',
-    message: 'Carlos Lima adicionou um novo documento ao projeto "Workshop Digital"',
-    project: 'Workshop Digital',
-    time: '5 dias atrás',
-    isRead: true,
-    priority: 'low',
-    icon: FileText,
-    color: 'text-gray-600',
-    bgColor: 'bg-gray-50'
-  },
-  {
-    id: 8,
-    type: 'deadline_overdue',
-    title: 'Prazo vencido',
-    message: 'A tarefa "Briefing inicial" está atrasada há 2 dias',
-    project: 'Conferência Anual',
-    time: '1 semana atrás',
-    isRead: true,
-    priority: 'high',
-    icon: Clock,
-    color: 'text-red-600',
-    bgColor: 'bg-red-50'
-  }
-];
+interface Notification {
+  id: string;
+  type: string;
+  title: string;
+  message: string;
+  isRead: boolean;
+  createdAt: string;
+  data?: any;
+  project?: string;
+  time?: string;
+  priority?: string;
+  icon?: any;
+  color?: string;
+  bgColor?: string;
+}
 
-const notificationTypes = [
-  { id: 'all', name: 'Todas', count: mockNotifications.length },
-  { id: 'unread', name: 'Não lidas', count: mockNotifications.filter(n => !n.isRead).length },
-  { id: 'deadline', name: 'Prazos', count: mockNotifications.filter(n => n.type.includes('deadline')).length },
-  { id: 'project', name: 'Projetos', count: mockNotifications.filter(n => n.type.includes('project')).length },
-  { id: 'team', name: 'Equipe', count: mockNotifications.filter(n => n.type.includes('team')).length },
-  { id: 'financial', name: 'Financeiro', count: mockNotifications.filter(n => n.type === 'financial').length }
+
+const getNotificationTypes = (notifications: Notification[]) => [
+  { id: 'all', name: 'Todas', count: notifications.length },
+  { id: 'unread', name: 'Não lidas', count: notifications.filter(n => !n.isRead).length },
+  { id: 'deadline', name: 'Prazos', count: notifications.filter(n => n.type?.includes('deadline')).length },
+  { id: 'project', name: 'Projetos', count: notifications.filter(n => n.type?.includes('project')).length },
+  { id: 'team', name: 'Equipe', count: notifications.filter(n => n.type?.includes('team')).length },
+  { id: 'financial', name: 'Financeiro', count: notifications.filter(n => n.type === 'financial').length }
 ];
 
 export default function Notificacoes() {
   const [selectedType, setSelectedType] = useState('all');
-  const [notifications, setNotifications] = useState(mockNotifications);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+
+  useEffect(() => {
+    loadNotifications();
+  }, []);
+
+  const loadNotifications = async () => {
+    try {
+      setIsLoading(true);
+      const response = await apiService.getNotifications();
+      const notificationsData = (response as any).notifications || [];
+      
+      const formattedNotifications = notificationsData.map((notif: any) => ({
+        id: notif.id,
+        type: notif.type,
+        title: notif.title || 'Notificação',
+        message: notif.message || '',
+        isRead: notif.isRead,
+        createdAt: notif.createdAt,
+        data: notif.data,
+        project: notif.data?.project || notif.data?.projectName || '',
+        time: formatTime(notif.createdAt),
+        priority: getPriorityFromType(notif.type),
+        icon: getIconFromType(notif.type),
+        color: getColorFromType(notif.type),
+        bgColor: getBgColorFromType(notif.type)
+      }));
+      
+      setNotifications(formattedNotifications);
+    } catch (error) {
+      console.error('Error loading notifications:', error);
+      setNotifications([]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const formatTime = (dateString: string) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+
+    if (diffMins < 1) return 'Agora';
+    if (diffMins < 60) return `${diffMins} minuto${diffMins > 1 ? 's' : ''} atrás`;
+    if (diffHours < 24) return `${diffHours} hora${diffHours > 1 ? 's' : ''} atrás`;
+    if (diffDays < 7) return `${diffDays} dia${diffDays > 1 ? 's' : ''} atrás`;
+    return date.toLocaleDateString('pt-BR');
+  };
+
+  const getPriorityFromType = (type: string): string => {
+    if (type.includes('deadline') || type.includes('overdue')) return 'high';
+    if (type.includes('financial') || type.includes('alert')) return 'high';
+    if (type.includes('project') || type.includes('task')) return 'medium';
+    return 'low';
+  };
+
+  const getIconFromType = (type: string) => {
+    if (type.includes('deadline')) return AlertCircle;
+    if (type.includes('task')) return CheckCircle2;
+    if (type.includes('project')) return CheckCircle2;
+    if (type.includes('team')) return Users;
+    if (type.includes('financial')) return DollarSign;
+    if (type.includes('document')) return FileText;
+    if (type.includes('schedule')) return Calendar;
+    return Bell;
+  };
+
+  const getColorFromType = (type: string): string => {
+    if (type.includes('deadline') || type.includes('overdue')) return 'text-red-600';
+    if (type.includes('financial')) return 'text-orange-600';
+    if (type.includes('task_completed')) return 'text-green-600';
+    if (type.includes('project')) return 'text-blue-600';
+    if (type.includes('team')) return 'text-purple-600';
+    return 'text-gray-600';
+  };
+
+  const getBgColorFromType = (type: string): string => {
+    if (type.includes('deadline') || type.includes('overdue')) return 'bg-red-50';
+    if (type.includes('financial')) return 'bg-orange-50';
+    if (type.includes('task_completed')) return 'bg-green-50';
+    if (type.includes('project')) return 'bg-blue-50';
+    if (type.includes('team')) return 'bg-purple-50';
+    return 'bg-gray-50';
+  };
 
   const filteredNotifications = notifications.filter(notification => {
     const matchesType = selectedType === 'all' || notification.type.includes(selectedType);
     const matchesSearch = notification.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          notification.message.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         notification.project.toLowerCase().includes(searchTerm.toLowerCase());
+                         (notification.project || '').toLowerCase().includes(searchTerm.toLowerCase());
     return matchesType && matchesSearch;
   });
 
-  const markAsRead = (id: number) => {
-    setNotifications(notifications.map(n => 
-      n.id === id ? { ...n, isRead: true } : n
-    ));
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
+
+  const markAsRead = async (id: string) => {
+    try {
+      await apiService.markNotificationAsRead(id);
+      setNotifications(notifications.map(n => 
+        n.id === id ? { ...n, isRead: true } : n
+      ));
+    } catch (error) {
+      console.error('Error marking notification as read:', error);
+      setNotifications(notifications.map(n => 
+        n.id === id ? { ...n, isRead: true } : n
+      ));
+    }
   };
 
-  const markAllAsRead = () => {
-    setNotifications(notifications.map(n => ({ ...n, isRead: true })));
+  const markAllAsRead = async () => {
+    try {
+      await apiService.markAllNotificationsAsRead();
+      setNotifications(notifications.map(n => ({ ...n, isRead: true })));
+    } catch (error) {
+      console.error('Error marking all as read:', error);
+      setNotifications(notifications.map(n => ({ ...n, isRead: true })));
+    }
   };
 
-  const deleteNotification = (id: number) => {
-    setNotifications(notifications.filter(n => n.id !== id));
+  const deleteNotification = async (id: string) => {
+    try {
+      await apiService.deleteNotification(id);
+      setNotifications(notifications.filter(n => n.id !== id));
+    } catch (error) {
+      console.error('Error deleting notification:', error);
+      setNotifications(notifications.filter(n => n.id !== id));
+    }
   };
 
   const getPriorityColor = (priority: string) => {
@@ -194,7 +220,7 @@ export default function Notificacoes() {
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">Filtros</h3>
             <div className="space-y-2">
-              {notificationTypes.map((type) => (
+              {getNotificationTypes(notifications).map((type) => (
                 <button
                   key={type.id}
                   onClick={() => setSelectedType(type.id)}
@@ -272,16 +298,18 @@ export default function Notificacoes() {
                   <p className="text-gray-500">Nenhuma notificação encontrada</p>
                 </div>
               ) : (
-                filteredNotifications.map((notification) => (
+                filteredNotifications.map((notification) => {
+                  const IconComponent = notification.icon || Bell;
+                  return (
                   <div
                     key={notification.id}
-                    className={`p-6 hover:bg-gray-50 transition-colors border-l-4 ${getPriorityColor(notification.priority)} ${
+                    className={`p-6 hover:bg-gray-50 transition-colors border-l-4 ${getPriorityColor(notification.priority || 'low')} ${
                       !notification.isRead ? 'bg-blue-50' : ''
                     }`}
                   >
                     <div className="flex items-start space-x-4">
-                      <div className={`w-10 h-10 ${notification.bgColor} rounded-lg flex items-center justify-center flex-shrink-0`}>
-                        <notification.icon className={notification.color} size={20} />
+                      <div className={`w-10 h-10 ${notification.bgColor || 'bg-gray-50'} rounded-lg flex items-center justify-center flex-shrink-0`}>
+                        <IconComponent className={notification.color || 'text-gray-600'} size={20} />
                       </div>
                       
                       <div className="flex-1 min-w-0">
@@ -330,7 +358,8 @@ export default function Notificacoes() {
                       </div>
                     </div>
                   </div>
-                ))
+                  );
+                })
               )}
             </div>
           </div>

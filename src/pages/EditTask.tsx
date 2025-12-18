@@ -20,82 +20,9 @@ import {
   Mail,
   Phone
 } from 'lucide-react';
-
-const mockUsers = [
-  { id: 1, name: 'Pedro Costa', email: 'pedro@gestorpro.com', avatar: 'PC', role: 'Funcionário' },
-  { id: 2, name: 'Maria Santos', email: 'maria@gestorpro.com', avatar: 'MS', role: 'Gestor' },
-  { id: 3, name: 'Ana Oliveira', email: 'ana@gestorpro.com', avatar: 'AO', role: 'Diretor' },
-  { id: 4, name: 'João Silva', email: 'joao@gestorpro.com', avatar: 'JS', role: 'Administrador' }
-];
-
-const mockProjects = [
-  { id: 1, name: 'Evento Corporativo Q1', color: 'blue' },
-  { id: 2, name: 'Lançamento Produto', color: 'green' },
-  { id: 3, name: 'Workshop Digital', color: 'purple' },
-  { id: 4, name: 'Sistema Interno', color: 'orange' }
-];
-
-const mockTask = {
-  id: 1,
-  code: 'TSK-001',
-  title: 'Criar apresentação do projeto',
-  description: 'Desenvolver apresentação completa para o cliente TechCorp',
-  project: 'Evento Corporativo Q1',
-  assignee: { id: 1, name: 'Pedro Costa', avatar: 'PC' },
-  status: 'Em andamento',
-  priority: 'Alta',
-  dueDate: '2024-01-25',
-  createdDate: '2024-01-15',
-  tags: ['apresentação', 'cliente'],
-  watchers: [
-    {
-      id: 1,
-      name: 'Maria Santos',
-      avatar: 'https://images.unsplash.com/photo-1494790108755-2616b612b786?w=32&h=32&fit=crop&crop=face',
-      role: 'Gestor',
-      email: 'maria@gestorpro.com',
-      phone: '(11) 99999-9999'
-    },
-    {
-      id: 2,
-      name: 'Carlos Lima',
-      avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=32&h=32&fit=crop&crop=face',
-      role: 'Cliente',
-      email: 'carlos@techcorp.com',
-      phone: '(11) 88888-8888'
-    }
-  ],
-  attachments: [
-    {
-      id: 1,
-      name: 'briefing_projeto.pdf',
-      type: 'pdf',
-      size: '2.4 MB',
-      uploadedAt: '2024-01-15',
-      uploadedBy: 'Maria Santos'
-    },
-    {
-      id: 2,
-      name: 'referencias_design.ai',
-      type: 'ai',
-      size: '15.2 MB',
-      uploadedAt: '2024-01-16',
-      uploadedBy: 'Pedro Costa'
-    },
-    {
-      id: 3,
-      name: 'logo_conceito.png',
-      type: 'png',
-      size: '1.8 MB',
-      uploadedAt: '2024-01-17',
-      uploadedBy: 'Pedro Costa'
-    }
-  ],
-  comments: 5,
-  progress: 65,
-  estimatedHours: 8,
-  completedHours: 5
-};
+import apiService from '../services/api';
+import { useAuth } from '../contexts/AuthContext';
+import { taskStatusToLabel, labelToTaskStatus, taskPriorityToLabel, labelToTaskPriority } from '../utils/statusMapper';
 
 const getStatusColor = (status: string) => {
   switch (status) {
@@ -127,16 +54,20 @@ const getFileIcon = (type: string) => {
 export default function EditTask() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
-  const [task, setTask] = useState(mockTask);
+  const [task, setTask] = useState<any>(null);
+  const [projects, setProjects] = useState<any[]>([]);
+  const [users, setUsers] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState<'form' | 'tags' | 'attachments' | 'people'>('form');
   const [editTask, setEditTask] = useState({
     title: '',
     description: '',
-    project: '',
-    assignee: '',
-    status: 'Pendente',
-    priority: 'Média',
+    projectId: '',
+    assigneeId: '',
+    status: 'TODO',
+    priority: 'MEDIUM',
     dueDate: '',
     estimatedHours: 0,
     tags: [] as string[]
@@ -145,39 +76,78 @@ export default function EditTask() {
   const [newWatcher, setNewWatcher] = useState('');
 
   useEffect(() => {
-    if (task) {
-      setEditTask({
-        title: task.title,
-        description: task.description,
-        project: task.project,
-        assignee: task.assignee.id.toString(),
-        status: task.status,
-        priority: task.priority,
-        dueDate: task.dueDate,
-        estimatedHours: task.estimatedHours,
-        tags: task.tags
-      });
+    if (id) {
+      loadData();
     }
-  }, [task]);
+  }, [id]);
+
+  const loadData = async () => {
+    try {
+      setIsLoading(true);
+      const [taskRes, projectsRes, usersRes] = await Promise.all([
+        apiService.getTask(id!),
+        apiService.getProjects(),
+        apiService.getUsers()
+      ]);
+      
+      const taskData = (taskRes as any).task || taskRes;
+      setTask(taskData);
+      setProjects((projectsRes as any).projects || []);
+      setUsers((usersRes as any).users || []);
+      
+      if (taskData) {
+        setEditTask({
+          title: taskData.title || '',
+          description: taskData.description || '',
+          projectId: taskData.projectId || taskData.project?.id || '',
+          assigneeId: taskData.assigneeId || taskData.assignee?.id || taskData.assignee?.userId || '',
+          status: taskData.status || 'TODO',
+          priority: taskData.priority || 'MEDIUM',
+          dueDate: taskData.dueDate ? new Date(taskData.dueDate).toISOString().split('T')[0] : '',
+          estimatedHours: taskData.estimatedHours || 0,
+          tags: taskData.tags || []
+        });
+      }
+    } catch (error: any) {
+      console.error('Error loading task data:', error);
+      const message = error.response?.data?.message || error.message || 'Erro ao carregar tarefa';
+      showToast.error(`Erro: ${message}`);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const handleSave = async () => {
-    if (!editTask.title || !editTask.project || !editTask.assignee) {
-      alert('Por favor, preencha todos os campos obrigatórios.');
+    if (!editTask.title || !editTask.projectId || !editTask.assigneeId) {
+      showToast.error('Por favor, preencha todos os campos obrigatórios.');
       return;
     }
 
-    setIsSaving(true);
-    
-    // Simular salvamento
-    setTimeout(() => {
-      console.log('Tarefa atualizada:', {
-        ...task,
-        ...editTask,
-        assignee: mockUsers.find(u => u.id.toString() === editTask.assignee)
-      });
-      setIsSaving(false);
+    if (!id) {
+      showToast.error('ID da tarefa não encontrado.');
+      return;
+    }
+
+    try {
+      setIsSaving(true);
+      const payload: any = {
+        title: editTask.title,
+        description: editTask.description || 'Sem descrição',
+        assigneeId: editTask.assigneeId,
+        priority: editTask.priority,
+        dueDate: editTask.dueDate ? new Date(editTask.dueDate).toISOString() : undefined,
+        estimatedHours: editTask.estimatedHours || undefined
+      };
+
+      await apiService.updateTask(id, payload);
       navigate(`/tarefas/${id}`);
-    }, 1000);
+    } catch (error: any) {
+      console.error('Error updating task:', error);
+      const message = error.response?.data?.message || error.message || 'Erro ao atualizar tarefa';
+      showToast.error(`Erro: ${message}`);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleAddTag = () => {
@@ -191,26 +161,77 @@ export default function EditTask() {
     setEditTask({ ...editTask, tags: editTask.tags.filter(tag => tag !== tagToRemove) });
   };
 
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
     if (files) {
-      console.log('Upload de arquivos:', files);
+      if (files && files.length > 0) {
+        const formData = new FormData();
+        Array.from(files).forEach(file => {
+          formData.append('files', file);
+        });
+        try {
+          await apiService.uploadTaskFiles(taskId, formData);
+          showToast.success('Arquivos enviados com sucesso!');
+        } catch (error) {
+          console.error('Error uploading files:', error);
+          showToast.error('Erro ao enviar arquivos');
+        }
+      }
     }
   };
 
-  const handleAddWatcher = () => {
+  const handleAddWatcher = async () => {
     if (newWatcher.trim()) {
-      console.log('Adicionando observador:', newWatcher);
+      if (newWatcher && taskId) {
+        try {
+          const watcherUser = users.find((u: any) => 
+            u.name?.toLowerCase().includes(newWatcher.toLowerCase()) ||
+            u.email?.toLowerCase().includes(newWatcher.toLowerCase())
+          );
+          if (watcherUser) {
+            const currentWatchers = task?.watchers || [];
+            if (!currentWatchers.find((w: any) => w.id === watcherUser.id)) {
+              await apiService.updateTask(taskId, {
+                watchers: [...currentWatchers, watcherUser]
+              });
+              showToast.success('Observador adicionado!');
+            }
+          }
+        } catch (error) {
+          console.error('Error adding watcher:', error);
+        }
+      }
       setNewWatcher('');
     }
   };
 
-  const handleRemoveWatcher = (watcherId: number) => {
-    console.log('Removendo observador:', watcherId);
+  const handleRemoveWatcher = async (watcherId: number) => {
+    if (watcherId && taskId) {
+      try {
+        const currentWatchers = task?.watchers || [];
+        await apiService.updateTask(taskId, {
+          watchers: currentWatchers.filter((w: any) => w.id !== watcherId)
+        });
+        await loadTask();
+      } catch (error) {
+        console.error('Error removing watcher:', error);
+      }
+    }
   };
 
-  const selectedProject = mockProjects.find(p => p.name === editTask.project);
-  const selectedAssignee = mockUsers.find(u => u.id.toString() === editTask.assignee);
+  const selectedProject = projects.find(p => (p.id || p.projectId) === editTask.projectId);
+  const selectedAssignee = users.find(u => (u.id || u.userId) === editTask.assigneeId);
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+          <p className="text-gray-600">Carregando tarefa...</p>
+        </div>
+      </div>
+    );
+  }
 
   if (!task) {
     return (
@@ -243,9 +264,9 @@ export default function EditTask() {
           </button>
           <div>
             <div className="flex items-center space-x-3 mb-2">
-              <h1 className="text-2xl font-bold text-gray-900">{task.code}</h1>
-              <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(task.status)}`}>
-                {task.status}
+              <h1 className="text-2xl font-bold text-gray-900">{task.taskId || task.code || `TSK-${task.id}`}</h1>
+              <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(taskStatusToLabel[task.status] || task.status)}`}>
+                {taskStatusToLabel[task.status] || task.status}
               </span>
             </div>
             <p className="text-gray-600">Editar tarefa</p>
@@ -365,13 +386,16 @@ export default function EditTask() {
                     Projeto *
                   </label>
                   <select
-                    value={editTask.project}
-                    onChange={(e) => setEditTask({...editTask, project: e.target.value})}
+                    value={editTask.projectId}
+                    onChange={(e) => setEditTask({...editTask, projectId: e.target.value})}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    required
                   >
                     <option value="">Selecione um projeto</option>
-                    {mockProjects.map(project => (
-                      <option key={project.id} value={project.name}>{project.name}</option>
+                    {projects.map(project => (
+                      <option key={project.id || project.projectId} value={project.id || project.projectId}>
+                        {project.name}
+                      </option>
                     ))}
                   </select>
                 </div>
@@ -381,13 +405,16 @@ export default function EditTask() {
                     Responsável *
                   </label>
                   <select
-                    value={editTask.assignee}
-                    onChange={(e) => setEditTask({...editTask, assignee: e.target.value})}
+                    value={editTask.assigneeId}
+                    onChange={(e) => setEditTask({...editTask, assigneeId: e.target.value})}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    required
                   >
                     <option value="">Selecione um responsável</option>
-                    {mockUsers.map(user => (
-                      <option key={user.id} value={user.id.toString()}>{user.name}</option>
+                    {users.map(user => (
+                      <option key={user.id || user.userId} value={user.userId || user.id}>
+                        {user.firstName} {user.lastName} ({user.email})
+                      </option>
                     ))}
                   </select>
                 </div>
@@ -403,11 +430,11 @@ export default function EditTask() {
                     onChange={(e) => setEditTask({...editTask, status: e.target.value})}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   >
-                    <option value="Pendente">Pendente</option>
-                    <option value="Em andamento">Em andamento</option>
-                    <option value="Pausado">Pausado</option>
-                    <option value="Concluído">Concluído</option>
-                    <option value="Cancelado">Cancelado</option>
+                    <option value="TODO">Pendente</option>
+                    <option value="IN_PROGRESS">Em andamento</option>
+                    <option value="REVIEW">Em Revisão</option>
+                    <option value="DONE">Concluído</option>
+                    <option value="CANCELLED">Cancelado</option>
                   </select>
                 </div>
 
@@ -420,9 +447,10 @@ export default function EditTask() {
                     onChange={(e) => setEditTask({...editTask, priority: e.target.value})}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   >
-                    <option value="Baixa">Baixa</option>
-                    <option value="Média">Média</option>
-                    <option value="Alta">Alta</option>
+                    <option value="LOW">Baixa</option>
+                    <option value="MEDIUM">Média</option>
+                    <option value="HIGH">Alta</option>
+                    <option value="URGENT">Urgente</option>
                   </select>
                 </div>
 
@@ -519,7 +547,7 @@ export default function EditTask() {
 
               {selectedProject && (
                 <div className="flex items-center space-x-3">
-                  <div className={`w-5 h-5 rounded-full bg-${selectedProject.color}-500`}></div>
+                  <div className="w-5 h-5 rounded-full bg-blue-500"></div>
                   <div>
                     <p className="text-sm font-medium text-gray-900">{selectedProject.name}</p>
                     <p className="text-xs text-gray-600">Projeto</p>
@@ -530,10 +558,14 @@ export default function EditTask() {
               {selectedAssignee && (
                 <div className="flex items-center space-x-3">
                   <div className="w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center">
-                    <span className="text-xs text-white font-medium">{selectedAssignee.avatar}</span>
+                    <span className="text-xs text-white font-medium">
+                      {selectedAssignee.firstName?.[0] || ''}{selectedAssignee.lastName?.[0] || ''}
+                    </span>
                   </div>
                   <div>
-                    <p className="text-sm font-medium text-gray-900">{selectedAssignee.name}</p>
+                    <p className="text-sm font-medium text-gray-900">
+                      {selectedAssignee.firstName} {selectedAssignee.lastName}
+                    </p>
                     <p className="text-xs text-gray-600">Responsável</p>
                   </div>
                 </div>
@@ -542,7 +574,9 @@ export default function EditTask() {
               <div className="flex items-center space-x-3">
                 <Flag size={20} className="text-gray-400" />
                 <div>
-                  <p className="text-sm font-medium text-gray-900">{editTask.priority}</p>
+                  <p className="text-sm font-medium text-gray-900">
+                    {taskPriorityToLabel[editTask.priority] || editTask.priority}
+                  </p>
                   <p className="text-xs text-gray-600">Prioridade</p>
                 </div>
               </div>
@@ -552,7 +586,9 @@ export default function EditTask() {
                   <span className="text-xs text-gray-600 font-medium">S</span>
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-gray-900">{editTask.status}</p>
+                  <p className="text-sm font-medium text-gray-900">
+                    {taskStatusToLabel[editTask.status] || editTask.status}
+                  </p>
                   <p className="text-xs text-gray-600">Status</p>
                 </div>
               </div>
@@ -607,7 +643,7 @@ export default function EditTask() {
                 <Calendar size={20} className="text-gray-400" />
                 <div>
                   <p className="text-sm font-medium text-gray-900">
-                    {new Date(task.createdDate).toLocaleDateString('pt-BR')}
+                    {task.createdAt ? new Date(task.createdAt).toLocaleDateString('pt-BR') : 'N/A'}
                   </p>
                   <p className="text-xs text-gray-600">Criado em</p>
                 </div>
@@ -616,7 +652,7 @@ export default function EditTask() {
               <div className="flex items-center space-x-3">
                 <FileText size={20} className="text-gray-400" />
                 <div>
-                  <p className="text-sm font-medium text-gray-900">{task.attachments.length}</p>
+                  <p className="text-sm font-medium text-gray-900">{task.attachments?.length || 0}</p>
                   <p className="text-xs text-gray-600">Anexos</p>
                 </div>
               </div>
@@ -624,7 +660,7 @@ export default function EditTask() {
               <div className="flex items-center space-x-3">
                 <User size={20} className="text-gray-400" />
                 <div>
-                  <p className="text-sm font-medium text-gray-900">{task.comments}</p>
+                  <p className="text-sm font-medium text-gray-900">{task.comments?.length || 0}</p>
                   <p className="text-xs text-gray-600">Comentários</p>
                 </div>
               </div>
@@ -632,7 +668,7 @@ export default function EditTask() {
               <div className="flex items-center space-x-3">
                 <Clock size={20} className="text-gray-400" />
                 <div>
-                  <p className="text-sm font-medium text-gray-900">{task.completedHours}h</p>
+                  <p className="text-sm font-medium text-gray-900">{task.completedHours || 0}h</p>
                   <p className="text-xs text-gray-600">Horas trabalhadas</p>
                 </div>
               </div>
@@ -706,29 +742,36 @@ export default function EditTask() {
               </div>
 
               <div className="space-y-3">
-                {task.attachments.map((attachment) => (
-                  <div key={attachment.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                    <div className="flex items-center space-x-3">
-                      <span className="text-2xl">{getFileIcon(attachment.type)}</span>
-                      <div>
-                        <p className="font-medium text-gray-900">{attachment.name}</p>
-                        <p className="text-sm text-gray-600">{attachment.size} • {attachment.uploadedBy} • {new Date(attachment.uploadedAt).toLocaleDateString('pt-BR')}</p>
+                {task.attachments && task.attachments.length > 0 ? (
+                  task.attachments.map((attachment: any) => (
+                    <div key={attachment.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                      <div className="flex items-center space-x-3">
+                        <span className="text-2xl">{getFileIcon(attachment.type || attachment.fileType || 'file')}</span>
+                        <div>
+                          <p className="font-medium text-gray-900">{attachment.name || attachment.fileName}</p>
+                          <p className="text-sm text-gray-600">
+                            {attachment.size || 'N/A'} • {attachment.uploadedBy || 'N/A'} • {attachment.uploadedAt ? new Date(attachment.uploadedAt).toLocaleDateString('pt-BR') : 'N/A'}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        {attachment.url && (
+                          <>
+                            <a href={attachment.url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 p-1">
+                              <Eye size={16} />
+                            </a>
+                            <a href={attachment.url} download className="text-green-600 hover:text-green-800 p-1">
+                              <Download size={16} />
+                            </a>
+                          </>
+                        )}
+                        <button className="text-red-600 hover:text-red-800 p-1">
+                          <Trash2 size={16} />
+                        </button>
                       </div>
                     </div>
-                    <div className="flex items-center space-x-2">
-                      <button className="text-blue-600 hover:text-blue-800 p-1">
-                        <Eye size={16} />
-                      </button>
-                      <button className="text-green-600 hover:text-green-800 p-1">
-                        <Download size={16} />
-                      </button>
-                      <button className="text-red-600 hover:text-red-800 p-1">
-                        <Trash2 size={16} />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-                {task.attachments.length === 0 && (
+                  ))
+                ) : (
                   <div className="text-center py-8 text-gray-500">
                     <Paperclip size={48} className="mx-auto mb-4 text-gray-300" />
                     <p>Nenhum arquivo anexado</p>
@@ -765,58 +808,68 @@ export default function EditTask() {
               {/* Responsável */}
               <div>
                 <h3 className="text-md font-medium text-gray-900 mb-3">Responsável</h3>
-                <div className="flex items-center space-x-3 p-4 bg-blue-50 rounded-lg">
-                  <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center">
-                    <span className="text-sm text-white font-medium">{task.assignee.avatar}</span>
+                {selectedAssignee ? (
+                  <div className="flex items-center space-x-3 p-4 bg-blue-50 rounded-lg">
+                    <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center">
+                      <span className="text-sm text-white font-medium">
+                        {selectedAssignee.firstName?.[0] || ''}{selectedAssignee.lastName?.[0] || ''}
+                      </span>
+                    </div>
+                    <div className="flex-1">
+                      <p className="font-medium text-gray-900">
+                        {selectedAssignee.firstName} {selectedAssignee.lastName}
+                      </p>
+                      <p className="text-sm text-gray-600">Responsável pela tarefa</p>
+                      <p className="text-xs text-gray-500">{selectedAssignee.email}</p>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <a href={`mailto:${selectedAssignee.email}`} className="text-blue-600 hover:text-blue-800 p-1">
+                        <Mail size={16} />
+                      </a>
+                    </div>
                   </div>
-                  <div className="flex-1">
-                    <p className="font-medium text-gray-900">{task.assignee.name}</p>
-                    <p className="text-sm text-gray-600">Responsável pela tarefa</p>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <button className="text-blue-600 hover:text-blue-800 p-1">
-                      <Mail size={16} />
-                    </button>
-                    <button className="text-blue-600 hover:text-blue-800 p-1">
-                      <Phone size={16} />
-                    </button>
-                  </div>
-                </div>
+                ) : (
+                  <p className="text-gray-500 text-sm">Nenhum responsável atribuído.</p>
+                )}
               </div>
 
               {/* Observadores */}
               <div>
                 <h3 className="text-md font-medium text-gray-900 mb-3">Observadores</h3>
                 <div className="space-y-3">
-                  {task.watchers.map((watcher) => (
-                    <div key={watcher.id} className="flex items-center space-x-3 p-4 bg-gray-50 rounded-lg">
-                      <img
-                        src={watcher.avatar}
-                        alt={watcher.name}
-                        className="w-10 h-10 rounded-full"
-                      />
-                      <div className="flex-1">
-                        <p className="font-medium text-gray-900">{watcher.name}</p>
-                        <p className="text-sm text-gray-600">{watcher.role}</p>
-                        <p className="text-xs text-gray-500">{watcher.email}</p>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <button className="text-blue-600 hover:text-blue-800 p-1">
-                          <Mail size={16} />
-                        </button>
-                        <button className="text-blue-600 hover:text-blue-800 p-1">
-                          <Phone size={16} />
-                        </button>
-                        <button 
-                          onClick={() => handleRemoveWatcher(watcher.id)}
-                          className="text-red-600 hover:text-red-800 p-1"
-                        >
-                          <X size={16} />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                  {task.watchers.length === 0 && (
+                  {task.watchers && task.watchers.length > 0 ? (
+                    task.watchers.map((watcherId: string) => {
+                      const watcher = users.find(u => (u.id || u.userId) === watcherId);
+                      if (!watcher) return null;
+                      return (
+                        <div key={watcherId} className="flex items-center space-x-3 p-4 bg-gray-50 rounded-lg">
+                          <div className="w-10 h-10 bg-gray-500 rounded-full flex items-center justify-center">
+                            <span className="text-sm text-white font-medium">
+                              {watcher.firstName?.[0] || ''}{watcher.lastName?.[0] || ''}
+                            </span>
+                          </div>
+                          <div className="flex-1">
+                            <p className="font-medium text-gray-900">
+                              {watcher.firstName} {watcher.lastName}
+                            </p>
+                            <p className="text-sm text-gray-600">{watcher.role}</p>
+                            <p className="text-xs text-gray-500">{watcher.email}</p>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <a href={`mailto:${watcher.email}`} className="text-blue-600 hover:text-blue-800 p-1">
+                              <Mail size={16} />
+                            </a>
+                            <button 
+                              onClick={() => handleRemoveWatcher(watcherId)}
+                              className="text-red-600 hover:text-red-800 p-1"
+                            >
+                              <X size={16} />
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })
+                  ) : (
                     <p className="text-gray-500 text-sm">Nenhum observador adicionado ainda.</p>
                   )}
                 </div>

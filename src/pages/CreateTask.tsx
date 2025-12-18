@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, 
@@ -11,67 +11,82 @@ import {
   FileText,
   Tag
 } from 'lucide-react';
-
-const mockUsers = [
-  { id: 1, name: 'Pedro Costa', email: 'pedro@gestorpro.com', avatar: 'PC', role: 'Funcionário' },
-  { id: 2, name: 'Maria Santos', email: 'maria@gestorpro.com', avatar: 'MS', role: 'Gestor' },
-  { id: 3, name: 'Ana Oliveira', email: 'ana@gestorpro.com', avatar: 'AO', role: 'Diretor' },
-  { id: 4, name: 'João Silva', email: 'joao@gestorpro.com', avatar: 'JS', role: 'Administrador' }
-];
-
-const mockProjects = [
-  { id: 1, name: 'Evento Corporativo Q1', color: 'blue' },
-  { id: 2, name: 'Lançamento Produto', color: 'green' },
-  { id: 3, name: 'Workshop Digital', color: 'purple' },
-  { id: 4, name: 'Sistema Interno', color: 'orange' }
-];
-
-const mockTasks = [
-  { id: 1, code: 'TSK-001' },
-  { id: 2, code: 'TSK-002' },
-  { id: 3, code: 'TSK-003' },
-  { id: 4, code: 'TSK-004' }
-];
+import apiService from '../services/api';
+import { useAuth } from '../contexts/AuthContext';
+import { labelToTaskPriority } from '../utils/statusMapper';
 
 export default function CreateTask() {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [projects, setProjects] = useState<any[]>([]);
+  const [users, setUsers] = useState<any[]>([]);
   const [newTask, setNewTask] = useState({
     title: '',
     description: '',
-    project: '',
-    assignee: '',
-    priority: 'Média',
+    projectId: '',
+    assigneeId: '',
+    priority: 'MEDIUM',
     dueDate: '',
     estimatedHours: 0,
     tags: [] as string[]
   });
   const [newTag, setNewTag] = useState('');
 
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const loadData = async () => {
+    try {
+      setIsLoading(true);
+      const [projectsRes, usersRes] = await Promise.all([
+        apiService.getProjects(),
+        apiService.getUsers()
+      ]);
+      setProjects(projectsRes.projects || []);
+      setUsers(usersRes.users || []);
+    } catch (error) {
+      console.error('Error loading data:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleSave = async () => {
-    if (!newTask.title || !newTask.project || !newTask.assignee) {
-      alert('Por favor, preencha todos os campos obrigatórios.');
+    if (!newTask.title || !newTask.projectId || !newTask.assigneeId) {
+      showToast.error('Por favor, preencha todos os campos obrigatórios.');
       return;
     }
 
-    setIsSaving(true);
-    
-    // Simular salvamento
-    setTimeout(() => {
-      console.log('Nova tarefa criada:', {
-        ...newTask,
-        id: Math.max(...mockTasks.map(t => t.id)) + 1,
-        code: `TSK-${String(Math.max(...mockTasks.map(t => t.id)) + 1).padStart(3, '0')}`,
-        status: 'Pendente',
-        createdDate: new Date().toISOString().split('T')[0],
-        attachments: 0,
-        comments: 0,
-        progress: 0,
-        completedHours: 0
-      });
-      setIsSaving(false);
+    if (!user) {
+      showToast.error('Usuário não autenticado.');
+      return;
+    }
+
+    try {
+      setIsSaving(true);
+      const payload = {
+        title: newTask.title,
+        description: newTask.description || 'Sem descrição',
+        projectId: newTask.projectId,
+        assigneeId: newTask.assigneeId,
+        reporterId: user.userId || user.id,
+        priority: newTask.priority,
+        dueDate: newTask.dueDate ? new Date(newTask.dueDate).toISOString() : undefined,
+        estimatedHours: newTask.estimatedHours || undefined
+      };
+
+      await apiService.createTask(payload);
       navigate('/tarefas');
-    }, 1000);
+    } catch (error: any) {
+      console.error('Error creating task:', error);
+      const message = error.response?.data?.message || error.message || 'Erro ao criar tarefa';
+      showToast.error(`Erro: ${message}`);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleAddTag = () => {
@@ -85,8 +100,19 @@ export default function CreateTask() {
     setNewTask({ ...newTask, tags: newTask.tags.filter(tag => tag !== tagToRemove) });
   };
 
-  const selectedProject = mockProjects.find(p => p.id.toString() === newTask.project);
-  const selectedAssignee = mockUsers.find(u => u.id.toString() === newTask.assignee);
+  const selectedProject = projects.find(p => p.id === newTask.projectId || p.projectId === newTask.projectId);
+  const selectedAssignee = users.find(u => u.userId === newTask.assigneeId || u.id === newTask.assigneeId);
+
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <div className="animate-pulse">
+          <div className="h-8 bg-gray-200 rounded w-1/4 mb-4"></div>
+          <div className="h-96 bg-gray-200 rounded"></div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -163,13 +189,16 @@ export default function CreateTask() {
                     Projeto *
                   </label>
                   <select
-                    value={newTask.project}
-                    onChange={(e) => setNewTask({...newTask, project: e.target.value})}
+                    value={newTask.projectId}
+                    onChange={(e) => setNewTask({...newTask, projectId: e.target.value})}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    required
                   >
                     <option value="">Selecione um projeto</option>
-                    {mockProjects.map(project => (
-                      <option key={project.id} value={project.id.toString()}>{project.name}</option>
+                    {projects.map(project => (
+                      <option key={project.id || project.projectId} value={project.id || project.projectId}>
+                        {project.name}
+                      </option>
                     ))}
                   </select>
                 </div>
@@ -179,13 +208,16 @@ export default function CreateTask() {
                     Responsável *
                   </label>
                   <select
-                    value={newTask.assignee}
-                    onChange={(e) => setNewTask({...newTask, assignee: e.target.value})}
+                    value={newTask.assigneeId}
+                    onChange={(e) => setNewTask({...newTask, assigneeId: e.target.value})}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    required
                   >
                     <option value="">Selecione um responsável</option>
-                    {mockUsers.map(user => (
-                      <option key={user.id} value={user.id.toString()}>{user.name}</option>
+                    {users.map(user => (
+                      <option key={user.id || user.userId} value={user.userId || user.id}>
+                        {user.firstName} {user.lastName} ({user.email})
+                      </option>
                     ))}
                   </select>
                 </div>
@@ -201,9 +233,10 @@ export default function CreateTask() {
                     onChange={(e) => setNewTask({...newTask, priority: e.target.value})}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   >
-                    <option value="Baixa">Baixa</option>
-                    <option value="Média">Média</option>
-                    <option value="Alta">Alta</option>
+                    <option value="LOW">Baixa</option>
+                    <option value="MEDIUM">Média</option>
+                    <option value="HIGH">Alta</option>
+                    <option value="URGENT">Urgente</option>
                   </select>
                 </div>
 
@@ -300,7 +333,7 @@ export default function CreateTask() {
 
               {selectedProject && (
                 <div className="flex items-center space-x-3">
-                  <div className={`w-5 h-5 rounded-full bg-${selectedProject.color}-500`}></div>
+                  <div className="w-5 h-5 rounded-full bg-blue-500"></div>
                   <div>
                     <p className="text-sm font-medium text-gray-900">{selectedProject.name}</p>
                     <p className="text-xs text-gray-600">Projeto</p>
@@ -311,10 +344,14 @@ export default function CreateTask() {
               {selectedAssignee && (
                 <div className="flex items-center space-x-3">
                   <div className="w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center">
-                    <span className="text-xs text-white font-medium">{selectedAssignee.avatar}</span>
+                    <span className="text-xs text-white font-medium">
+                      {selectedAssignee.firstName?.[0]}{selectedAssignee.lastName?.[0]}
+                    </span>
                   </div>
                   <div>
-                    <p className="text-sm font-medium text-gray-900">{selectedAssignee.name}</p>
+                    <p className="text-sm font-medium text-gray-900">
+                      {selectedAssignee.firstName} {selectedAssignee.lastName}
+                    </p>
                     <p className="text-xs text-gray-600">Responsável</p>
                   </div>
                 </div>
@@ -323,7 +360,11 @@ export default function CreateTask() {
               <div className="flex items-center space-x-3">
                 <Flag size={20} className="text-gray-400" />
                 <div>
-                  <p className="text-sm font-medium text-gray-900">{newTask.priority}</p>
+                  <p className="text-sm font-medium text-gray-900">
+                    {newTask.priority === 'LOW' ? 'Baixa' : 
+                     newTask.priority === 'MEDIUM' ? 'Média' :
+                     newTask.priority === 'HIGH' ? 'Alta' : 'Urgente'}
+                  </p>
                   <p className="text-xs text-gray-600">Prioridade</p>
                 </div>
               </div>

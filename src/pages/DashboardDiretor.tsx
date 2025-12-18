@@ -1,4 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useAuth } from '../contexts/AuthContext';
+import apiService from '../services/api';
+import { projectStatusToLabel } from '../utils/statusMapper';
+import { showToast } from '../utils/toast';
 import { 
   TrendingUp, 
   DollarSign, 
@@ -14,50 +18,10 @@ import {
   Users
 } from 'lucide-react';
 
-const mockFinancialData = [
-  {
-    id: 1,
-    project: 'Evento Corporativo Q1',
-    client: 'TechCorp',
-    budget: 150000,
-    spent: 97500,
-    remaining: 52500,
-    status: 'Em execução',
-    roi: 15.2
-  },
-  {
-    id: 2,
-    project: 'Lançamento Produto',
-    client: 'InnovaCorp',
-    budget: 80000,
-    spent: 24000,
-    remaining: 56000,
-    status: 'Em concorrência',
-    roi: 8.5
-  },
-  {
-    id: 3,
-    project: 'Workshop Digital',
-    client: 'EduTech',
-    budget: 25000,
-    spent: 25000,
-    remaining: 0,
-    status: 'Concluído',
-    roi: 22.1
-  }
-];
-
-const stats = [
-  { name: 'Receita Total', value: 'R$ 2.4M', change: '+18%', changeType: 'positive', icon: DollarSign },
-  { name: 'Custos Operacionais', value: 'R$ 1.2M', change: '+5%', changeType: 'positive', icon: TrendingUp },
-  { name: 'Margem de Lucro', value: '42%', change: '+8%', changeType: 'positive', icon: BarChart3 },
-  { name: 'ROI Médio', value: '18.5%', change: '+3%', changeType: 'positive', icon: Target },
-];
-
 const getStatusColor = (status: string) => {
   switch (status) {
-    case 'Em execução': return 'bg-blue-100 text-blue-800';
-    case 'Em concorrência': return 'bg-yellow-100 text-yellow-800';
+    case 'Em Execução': return 'bg-blue-100 text-blue-800';
+    case 'Em Concorrência': return 'bg-yellow-100 text-yellow-800';
     case 'Concluído': return 'bg-green-100 text-green-800';
     case 'Cancelado': return 'bg-red-100 text-red-800';
     default: return 'bg-gray-100 text-gray-800';
@@ -71,20 +35,176 @@ const getROIColor = (roi: number) => {
 };
 
 export default function DashboardDiretor() {
-  const [selectedProject, setSelectedProject] = useState<number | null>(null);
+  const { user } = useAuth();
+  const [selectedProject, setSelectedProject] = useState<string | null>(null);
   const [timeRange, setTimeRange] = useState('6m');
+  const [isLoading, setIsLoading] = useState(true);
+  const [projects, setProjects] = useState<any[]>([]);
+  const [financialReport, setFinancialReport] = useState<any>(null);
 
-  const handleProjectClick = (projectId: number) => {
+  useEffect(() => {
+    loadData();
+  }, [timeRange]);
+
+  const loadData = async () => {
+    try {
+      setIsLoading(true);
+      
+      const response = await apiService.getDirectorDashboard();
+      const dashboardData = response?.data;
+
+      if (dashboardData) {
+        if (dashboardData.topProjects) {
+          setProjects(dashboardData.topProjects);
+        }
+
+        if (dashboardData.summary?.financial) {
+          setFinancialReport({
+            totalBudget: dashboardData.summary.financial.totalBudget || 0,
+            totalSpent: dashboardData.summary.financial.totalSpent || 0,
+            remaining: dashboardData.summary.financial.remaining || 0
+          });
+        }
+      } else {
+        const startDate = new Date();
+        if (timeRange === '3m') {
+          startDate.setMonth(startDate.getMonth() - 3);
+        } else if (timeRange === '6m') {
+          startDate.setMonth(startDate.getMonth() - 6);
+        } else {
+          startDate.setFullYear(startDate.getFullYear() - 1);
+        }
+
+        const [projectsRes, reportRes] = await Promise.all([
+          apiService.getProjects(),
+          apiService.getFinancialDashboardReport({
+            startDate: startDate.toISOString().split('T')[0],
+            endDate: new Date().toISOString().split('T')[0]
+          })
+        ]);
+
+        const projectsData = projectsRes?.data?.projects || [];
+        setProjects(projectsData);
+        
+        if (reportRes?.data?.report) {
+          setFinancialReport(reportRes.data.report);
+        }
+      }
+    } catch (error) {
+      console.error('Error loading director dashboard:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleProjectClick = (projectId: string) => {
     setSelectedProject(selectedProject === projectId ? null : projectId);
   };
 
-  const handleViewDetails = (projectId: number) => {
-    console.log('Visualizar detalhes financeiros:', projectId);
+  const handleViewDetails = (projectId: string) => {
+    window.location.href = `/projetos/${projectId}`;
   };
 
-  const handleExportReport = () => {
-    console.log('Exportar relatório financeiro');
+  const handleExportReport = async () => {
+    try {
+      const reportData = {
+        summary,
+        projects: financialProjects,
+        generatedAt: new Date().toISOString()
+      };
+      
+      const dataStr = JSON.stringify(reportData, null, 2);
+      const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
+      const exportFileDefaultName = `relatorio-financeiro-${new Date().toISOString().split('T')[0]}.json`;
+      
+      const linkElement = document.createElement('a');
+      linkElement.setAttribute('href', dataUri);
+      linkElement.setAttribute('download', exportFileDefaultName);
+      linkElement.click();
+    } catch (error) {
+      console.error('Error exporting report:', error);
+      showToast.error('Erro ao exportar relatório');
+    }
   };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-gray-500">Carregando...</div>
+      </div>
+    );
+  }
+
+  const summary = financialReport?.summary || {
+    totalIncome: 0,
+    totalExpenses: 0,
+    netProfit: 0
+  };
+
+  const profitMargin = summary.totalIncome > 0 
+    ? ((summary.netProfit / summary.totalIncome) * 100).toFixed(1)
+    : '0';
+
+  const avgROI = projects.length > 0
+    ? projects.reduce((sum: number, p: any) => {
+        const budget = parseFloat(p.budget?.planned || p.budget || '0');
+        const spent = parseFloat(p.budget?.spent || '0');
+        if (budget > 0 && spent > 0) {
+          return sum + ((budget - spent) / spent) * 100;
+        }
+        return sum;
+      }, 0) / projects.length
+    : 0;
+
+  const stats = [
+    { 
+      name: 'Receita Total', 
+      value: `R$ ${(summary.totalIncome / 1000000).toFixed(1)}M`, 
+      change: '+18%', 
+      changeType: 'positive', 
+      icon: DollarSign 
+    },
+    { 
+      name: 'Custos Operacionais', 
+      value: `R$ ${(summary.totalExpenses / 1000000).toFixed(1)}M`, 
+      change: '+5%', 
+      changeType: 'positive', 
+      icon: TrendingUp 
+    },
+    { 
+      name: 'Margem de Lucro', 
+      value: `${profitMargin}%`, 
+      change: '+8%', 
+      changeType: 'positive', 
+      icon: BarChart3 
+    },
+    { 
+      name: 'ROI Médio', 
+      value: `${avgROI.toFixed(1)}%`, 
+      change: '+3%', 
+      changeType: 'positive', 
+      icon: Target 
+    },
+  ];
+
+  const financialProjects = projects.map((project: any) => {
+    const budget = parseFloat(project.budget?.planned || project.budget || '0');
+    const spent = parseFloat(project.budget?.spent || '0');
+    const remaining = budget - spent;
+    const roi = budget > 0 && spent > 0 ? ((budget - spent) / spent) * 100 : 0;
+    const status = projectStatusToLabel(project.status);
+    
+    return {
+      id: project.id,
+      project: project.name,
+      client: project.client?.name || project.clientId || '-',
+      budget,
+      spent,
+      remaining,
+      status,
+      roi
+    };
+  });
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -151,7 +271,7 @@ export default function DashboardDiretor() {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {mockFinancialData.map((project) => (
+                  {financialProjects.map((project) => (
                     <tr 
                       key={project.id} 
                       className={`hover:bg-gray-50 transition-colors cursor-pointer ${selectedProject === project.id ? 'bg-blue-50' : ''}`}
@@ -172,7 +292,7 @@ export default function DashboardDiretor() {
                       </td>
                       <td className="px-3 py-3 whitespace-nowrap">
                         <span className={`text-sm font-semibold ${getROIColor(project.roi)}`}>
-                          {project.roi}%
+                          {project.roi.toFixed(1)}%
                         </span>
                       </td>
                       <td className="px-3 py-3 whitespace-nowrap">
@@ -196,6 +316,13 @@ export default function DashboardDiretor() {
                       </td>
                     </tr>
                   ))}
+                  {financialProjects.length === 0 && (
+                    <tr>
+                      <td colSpan={7} className="px-3 py-8 text-center text-gray-500">
+                        Nenhum projeto encontrado
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>
@@ -211,14 +338,14 @@ export default function DashboardDiretor() {
                   <div className="w-3 h-3 bg-green-500 rounded-full mr-2"></div>
                   <span className="text-sm text-gray-700">Margem de Lucro</span>
                 </div>
-                <span className="text-sm font-semibold text-green-600">42%</span>
+                <span className="text-sm font-semibold text-green-600">{profitMargin}%</span>
               </div>
               <div className="flex items-center justify-between p-3 bg-blue-50 rounded-lg">
                 <div className="flex items-center">
                   <div className="w-3 h-3 bg-blue-500 rounded-full mr-2"></div>
                   <span className="text-sm text-gray-700">ROI Médio</span>
                 </div>
-                <span className="text-sm font-semibold text-blue-600">18.5%</span>
+                <span className="text-sm font-semibold text-blue-600">{avgROI.toFixed(1)}%</span>
               </div>
               <div className="flex items-center justify-between p-3 bg-yellow-50 rounded-lg">
                 <div className="flex items-center">
@@ -231,50 +358,29 @@ export default function DashboardDiretor() {
           </div>
 
           <div className="card animate-slide-up delay-400">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Alertas Executivos</h3>
-            <div className="space-y-3">
-              <div className="flex items-start space-x-3 p-3 bg-red-50 rounded-lg">
-                <AlertCircle className="text-red-500 mt-0.5" size={16} />
-                <div>
-                  <p className="text-sm font-medium text-red-800">Budget Crítico</p>
-                  <p className="text-xs text-red-600">Evento Corporativo Q1 - 65% gasto</p>
-                </div>
-              </div>
-              <div className="flex items-start space-x-3 p-3 bg-yellow-50 rounded-lg">
-                <Clock className="text-yellow-500 mt-0.5" size={16} />
-                <div>
-                  <p className="text-sm font-medium text-yellow-800">Aprovação Pendente</p>
-                  <p className="text-xs text-yellow-600">Lançamento Produto - Budget</p>
-                </div>
-              </div>
-              <div className="flex items-start space-x-3 p-3 bg-green-50 rounded-lg">
-                <CheckCircle2 className="text-green-500 mt-0.5" size={16} />
-                <div>
-                  <p className="text-sm font-medium text-green-800">Projeto Concluído</p>
-                  <p className="text-xs text-green-600">Workshop Digital - ROI 22.1%</p>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="card animate-slide-up delay-500">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">Resumo Mensal</h3>
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-sm text-gray-600">Receita Bruta</span>
-                <span className="text-sm font-semibold">R$ 2.4M</span>
+                <span className="text-sm font-semibold">
+                  R$ {(summary.totalIncome / 1000000).toFixed(1)}M
+                </span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-sm text-gray-600">Custos Diretos</span>
-                <span className="text-sm font-semibold">R$ 1.2M</span>
+                <span className="text-sm font-semibold">
+                  R$ {(summary.totalExpenses / 1000000).toFixed(1)}M
+                </span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-sm text-gray-600">Margem Bruta</span>
-                <span className="text-sm font-semibold text-green-600">R$ 1.2M</span>
+                <span className="text-sm font-semibold text-green-600">
+                  R$ {(summary.netProfit / 1000000).toFixed(1)}M
+                </span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-sm text-gray-600">Margem %</span>
-                <span className="text-sm font-semibold text-green-600">50%</span>
+                <span className="text-sm font-semibold text-green-600">{profitMargin}%</span>
               </div>
             </div>
           </div>

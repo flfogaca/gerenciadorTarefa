@@ -1,4 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useAuth } from '../contexts/AuthContext';
+import apiService from '../services/api';
+import { showToast } from '../utils/toast';
 import { 
   Settings, 
   User, 
@@ -17,14 +20,53 @@ import {
   Edit
 } from 'lucide-react';
 
-const mockSettings = {
+interface SettingsData {
   profile: {
-    name: 'João Silva',
-    email: 'joao.silva@empresa.com',
-    role: 'Administrador',
-    avatar: 'JD',
-    phone: '(11) 99999-9999',
-    department: 'Gestão'
+    name: string;
+    email: string;
+    role: string;
+    avatar: string;
+    phone: string;
+    department: string;
+  };
+  notifications: {
+    emailNotifications: boolean;
+    pushNotifications: boolean;
+    projectUpdates: boolean;
+    deadlineAlerts: boolean;
+    financialAlerts: boolean;
+    teamUpdates: boolean;
+  };
+  security: {
+    twoFactorAuth: boolean;
+    sessionTimeout: number;
+    passwordExpiry: number;
+    loginAlerts: boolean;
+  };
+  appearance: {
+    theme: string;
+    language: string;
+    timezone: string;
+    dateFormat: string;
+    currency: string;
+  };
+  integrations: {
+    googleDrive: boolean;
+    oneDrive: boolean;
+    slack: boolean;
+    teams: boolean;
+    calendar: boolean;
+  };
+}
+
+const defaultSettings: SettingsData = {
+  profile: {
+    name: '',
+    email: '',
+    role: '',
+    avatar: '',
+    phone: '',
+    department: ''
   },
   notifications: {
     emailNotifications: true,
@@ -57,15 +99,148 @@ const mockSettings = {
 };
 
 export default function Configuracoes() {
+  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<'profile' | 'notifications' | 'security' | 'appearance' | 'integrations'>('profile');
-  const [settings, setSettings] = useState(mockSettings);
+  const [settings, setSettings] = useState<SettingsData>(defaultSettings);
   const [isSaving, setIsSaving] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const handleSave = () => {
-    setIsSaving(true);
-    setTimeout(() => {
+  useEffect(() => {
+    loadSettings();
+  }, [user]);
+
+  const loadSettings = async () => {
+    try {
+      setIsLoading(true);
+      
+      const [userSettingsRes, tenantSettingsRes, userRes] = await Promise.all([
+        apiService.getUserSettings().catch(() => null),
+        apiService.getTenantSettings().catch(() => null),
+        apiService.getCurrentUser().catch(() => null)
+      ]);
+
+      const userData = userRes?.data?.user || userRes?.data || user;
+      const userSettings = userSettingsRes?.data?.settings;
+      const tenantSettings = tenantSettingsRes?.data?.settings;
+
+      if (userData) {
+        setSettings(prev => ({
+          ...prev,
+          profile: {
+            name: `${userData.firstName || ''} ${userData.lastName || ''}`.trim() || userData.name || '',
+            email: userData.email || '',
+            role: userData.role || '',
+            avatar: (userData.firstName || userData.name || 'U').substring(0, 2).toUpperCase(),
+            phone: userData.phone || '',
+            department: userData.department || ''
+          }
+        }));
+      }
+
+      if (userSettings) {
+        setSettings(prev => ({
+          ...prev,
+          notifications: {
+            ...prev.notifications,
+            ...(userSettings.notifications || {})
+          },
+          appearance: {
+            ...prev.appearance,
+            theme: userSettings.theme || prev.appearance.theme,
+            language: userSettings.language || prev.appearance.language,
+            timezone: userSettings.timezone || prev.appearance.timezone
+          }
+        }));
+      }
+
+      if (tenantSettings) {
+        setSettings(prev => ({
+          ...prev,
+          integrations: {
+            ...prev.integrations,
+            ...(tenantSettings.integrations || {})
+          }
+        }));
+      }
+    } catch (error) {
+      console.error('Error loading settings:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const loadUserProfile = async () => {
+    try {
+      const userRes = await apiService.getCurrentUser();
+      const userData = userRes?.data?.user || userRes?.data;
+      
+      if (userData) {
+        setSettings(prev => ({
+          ...prev,
+          profile: {
+            name: userData.name || user?.name || '',
+            email: userData.email || user?.email || '',
+            role: userData.role || user?.role || '',
+            avatar: (userData.name || user?.name || 'U').substring(0, 2).toUpperCase(),
+            phone: userData.phone || '',
+            department: userData.department || ''
+          }
+        }));
+      }
+    } catch (error) {
+      console.error('Error loading user profile:', error);
+    }
+  };
+
+  const handleSave = async () => {
+    try {
+      setIsSaving(true);
+      
+      if (activeTab === 'profile') {
+        try {
+          const nameParts = settings.profile.name.split(' ');
+          await apiService.updateUser(user?.id || '', {
+            firstName: nameParts[0] || '',
+            lastName: nameParts.slice(1).join(' ') || '',
+            email: settings.profile.email,
+            phone: settings.profile.phone,
+            department: settings.profile.department
+          });
+        } catch (error) {
+          console.error('Error updating profile:', error);
+        }
+      }
+
+      if (activeTab === 'notifications' || activeTab === 'appearance') {
+        try {
+          await apiService.updateUserSettings({
+            notifications: activeTab === 'notifications' ? settings.notifications : undefined,
+            theme: activeTab === 'appearance' ? settings.appearance.theme : undefined,
+            language: activeTab === 'appearance' ? settings.appearance.language : undefined,
+            timezone: activeTab === 'appearance' ? settings.appearance.timezone : undefined
+          });
+        } catch (error) {
+          console.error('Error updating user settings:', error);
+        }
+      }
+
+      if (activeTab === 'integrations') {
+        try {
+          await apiService.updateTenantSettings({
+            integrations: settings.integrations
+          });
+        } catch (error) {
+          console.error('Error updating tenant settings:', error);
+        }
+      }
+      
+      showToast.success('Configurações salvas com sucesso!');
+    } catch (error) {
+      console.error('Error saving settings:', error);
+      showToast.error('Erro ao salvar configurações');
+    } finally {
       setIsSaving(false);
-    }, 1000);
+    }
   };
 
   const tabs = [
@@ -75,6 +250,14 @@ export default function Configuracoes() {
     { id: 'appearance', name: 'Aparência', icon: Palette },
     { id: 'integrations', name: 'Integrações', icon: Globe }
   ];
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-gray-500">Carregando...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -119,8 +302,8 @@ export default function Configuracoes() {
                   <span className="text-white font-semibold text-2xl">{settings.profile.avatar}</span>
                 </div>
                 <div>
-                  <h3 className="text-xl font-semibold text-gray-900">{settings.profile.name}</h3>
-                  <p className="text-gray-600">{settings.profile.role} • {settings.profile.department}</p>
+                  <h3 className="text-xl font-semibold text-gray-900">{settings.profile.name || 'Usuário'}</h3>
+                  <p className="text-gray-600">{settings.profile.role || 'Usuário'} • {settings.profile.department || 'Sem departamento'}</p>
                   <button className="mt-2 text-blue-600 hover:text-blue-700 text-sm font-medium">
                     Alterar foto
                   </button>
@@ -162,6 +345,7 @@ export default function Configuracoes() {
                     onChange={(e) => setSettings({...settings, profile: {...settings.profile, department: e.target.value}})}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   >
+                    <option value="">Selecione</option>
                     <option value="Gestão">Gestão</option>
                     <option value="Negócios">Negócios</option>
                     <option value="Planejamento">Planejamento</option>
@@ -181,69 +365,36 @@ export default function Configuracoes() {
                 <h3 className="text-lg font-semibold text-gray-900">Preferências de Notificação</h3>
                 
                 <div className="space-y-4">
-                  <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                    <div>
-                      <h4 className="font-medium text-gray-900">Notificações por Email</h4>
-                      <p className="text-sm text-gray-600">Receba atualizações importantes por email</p>
+                  {[
+                    { key: 'emailNotifications', label: 'Notificações por Email', desc: 'Receba atualizações importantes por email' },
+                    { key: 'pushNotifications', label: 'Notificações Push', desc: 'Receba notificações no navegador' },
+                    { key: 'projectUpdates', label: 'Atualizações de Projetos', desc: 'Notificações sobre mudanças nos projetos' },
+                    { key: 'deadlineAlerts', label: 'Alertas de Prazo', desc: 'Lembretes sobre prazos próximos' },
+                    { key: 'financialAlerts', label: 'Alertas Financeiros', desc: 'Notificações sobre questões financeiras' },
+                    { key: 'teamUpdates', label: 'Atualizações da Equipe', desc: 'Notificações sobre atividades da equipe' }
+                  ].map(({ key, label, desc }) => (
+                    <div key={key} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                      <div>
+                        <h4 className="font-medium text-gray-900">{label}</h4>
+                        <p className="text-sm text-gray-600">{desc}</p>
+                      </div>
+                      <label className="relative inline-flex items-center cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={settings.notifications[key as keyof typeof settings.notifications] as boolean}
+                          onChange={(e) => setSettings({
+                            ...settings, 
+                            notifications: {
+                              ...settings.notifications, 
+                              [key]: e.target.checked
+                            }
+                          })}
+                          className="sr-only peer"
+                        />
+                        <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                      </label>
                     </div>
-                    <label className="relative inline-flex items-center cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={settings.notifications.emailNotifications}
-                        onChange={(e) => setSettings({...settings, notifications: {...settings.notifications, emailNotifications: e.target.checked}})}
-                        className="sr-only peer"
-                      />
-                      <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                    </label>
-                  </div>
-
-                  <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                    <div>
-                      <h4 className="font-medium text-gray-900">Notificações Push</h4>
-                      <p className="text-sm text-gray-600">Receba notificações no navegador</p>
-                    </div>
-                    <label className="relative inline-flex items-center cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={settings.notifications.pushNotifications}
-                        onChange={(e) => setSettings({...settings, notifications: {...settings.notifications, pushNotifications: e.target.checked}})}
-                        className="sr-only peer"
-                      />
-                      <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                    </label>
-                  </div>
-
-                  <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                    <div>
-                      <h4 className="font-medium text-gray-900">Atualizações de Projetos</h4>
-                      <p className="text-sm text-gray-600">Notificações sobre mudanças nos projetos</p>
-                    </div>
-                    <label className="relative inline-flex items-center cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={settings.notifications.projectUpdates}
-                        onChange={(e) => setSettings({...settings, notifications: {...settings.notifications, projectUpdates: e.target.checked}})}
-                        className="sr-only peer"
-                      />
-                      <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                    </label>
-                  </div>
-
-                  <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                    <div>
-                      <h4 className="font-medium text-gray-900">Alertas de Prazo</h4>
-                      <p className="text-sm text-gray-600">Lembretes sobre prazos próximos</p>
-                    </div>
-                    <label className="relative inline-flex items-center cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={settings.notifications.deadlineAlerts}
-                        onChange={(e) => setSettings({...settings, notifications: {...settings.notifications, deadlineAlerts: e.target.checked}})}
-                        className="sr-only peer"
-                      />
-                      <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                    </label>
-                  </div>
+                  ))}
                 </div>
               </div>
             </div>
@@ -276,7 +427,7 @@ export default function Configuracoes() {
                     <input
                       type="number"
                       value={settings.security.sessionTimeout}
-                      onChange={(e) => setSettings({...settings, security: {...settings.security, sessionTimeout: parseInt(e.target.value)}})}
+                      onChange={(e) => setSettings({...settings, security: {...settings.security, sessionTimeout: parseInt(e.target.value) || 30}})}
                       className="w-32 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     />
                   </div>
@@ -286,7 +437,7 @@ export default function Configuracoes() {
                     <input
                       type="number"
                       value={settings.security.passwordExpiry}
-                      onChange={(e) => setSettings({...settings, security: {...settings.security, passwordExpiry: parseInt(e.target.value)}})}
+                      onChange={(e) => setSettings({...settings, security: {...settings.security, passwordExpiry: parseInt(e.target.value) || 90}})}
                       className="w-32 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     />
                   </div>
@@ -387,110 +538,40 @@ export default function Configuracoes() {
                 <p className="text-gray-600">Conecte suas ferramentas favoritas para uma experiência mais integrada</p>
                 
                 <div className="space-y-4">
-                  <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                    <div className="flex items-center space-x-3">
-                      <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                        <span className="text-blue-600 font-bold">G</span>
+                  {[
+                    { key: 'googleDrive', label: 'Google Drive', desc: 'Sincronize arquivos e documentos', icon: 'G' },
+                    { key: 'oneDrive', label: 'Microsoft OneDrive', desc: 'Acesse arquivos do OneDrive', icon: 'M' },
+                    { key: 'slack', label: 'Slack', desc: 'Notificações e atualizações no Slack', icon: 'S', color: 'purple' },
+                    { key: 'teams', label: 'Microsoft Teams', desc: 'Integração com Teams', icon: 'T' },
+                    { key: 'calendar', label: 'Google Calendar', desc: 'Sincronize eventos e cronogramas', icon: 'C', color: 'green' }
+                  ].map(({ key, label, desc, icon, color = 'blue' }) => (
+                    <div key={key} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                      <div className="flex items-center space-x-3">
+                        <div className={`w-10 h-10 bg-${color}-100 rounded-lg flex items-center justify-center`}>
+                          <span className={`text-${color}-600 font-bold`}>{icon}</span>
+                        </div>
+                        <div>
+                          <h4 className="font-medium text-gray-900">{label}</h4>
+                          <p className="text-sm text-gray-600">{desc}</p>
+                        </div>
                       </div>
-                      <div>
-                        <h4 className="font-medium text-gray-900">Google Drive</h4>
-                        <p className="text-sm text-gray-600">Sincronize arquivos e documentos</p>
-                      </div>
+                      <label className="relative inline-flex items-center cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={settings.integrations[key as keyof typeof settings.integrations] as boolean}
+                          onChange={(e) => setSettings({
+                            ...settings, 
+                            integrations: {
+                              ...settings.integrations, 
+                              [key]: e.target.checked
+                            }
+                          })}
+                          className="sr-only peer"
+                        />
+                        <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                      </label>
                     </div>
-                    <label className="relative inline-flex items-center cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={settings.integrations.googleDrive}
-                        onChange={(e) => setSettings({...settings, integrations: {...settings.integrations, googleDrive: e.target.checked}})}
-                        className="sr-only peer"
-                      />
-                      <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                    </label>
-                  </div>
-
-                  <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                    <div className="flex items-center space-x-3">
-                      <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                        <span className="text-blue-600 font-bold">M</span>
-                      </div>
-                      <div>
-                        <h4 className="font-medium text-gray-900">Microsoft OneDrive</h4>
-                        <p className="text-sm text-gray-600">Acesse arquivos do OneDrive</p>
-                      </div>
-                    </div>
-                    <label className="relative inline-flex items-center cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={settings.integrations.oneDrive}
-                        onChange={(e) => setSettings({...settings, integrations: {...settings.integrations, oneDrive: e.target.checked}})}
-                        className="sr-only peer"
-                      />
-                      <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                    </label>
-                  </div>
-
-                  <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                    <div className="flex items-center space-x-3">
-                      <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
-                        <span className="text-purple-600 font-bold">S</span>
-                      </div>
-                      <div>
-                        <h4 className="font-medium text-gray-900">Slack</h4>
-                        <p className="text-sm text-gray-600">Notificações e atualizações no Slack</p>
-                      </div>
-                    </div>
-                    <label className="relative inline-flex items-center cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={settings.integrations.slack}
-                        onChange={(e) => setSettings({...settings, integrations: {...settings.integrations, slack: e.target.checked}})}
-                        className="sr-only peer"
-                      />
-                      <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                    </label>
-                  </div>
-
-                  <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                    <div className="flex items-center space-x-3">
-                      <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                        <span className="text-blue-600 font-bold">T</span>
-                      </div>
-                      <div>
-                        <h4 className="font-medium text-gray-900">Microsoft Teams</h4>
-                        <p className="text-sm text-gray-600">Integração com Teams</p>
-                      </div>
-                    </div>
-                    <label className="relative inline-flex items-center cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={settings.integrations.teams}
-                        onChange={(e) => setSettings({...settings, integrations: {...settings.integrations, teams: e.target.checked}})}
-                        className="sr-only peer"
-                      />
-                      <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                    </label>
-                  </div>
-
-                  <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                    <div className="flex items-center space-x-3">
-                      <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
-                        <span className="text-green-600 font-bold">C</span>
-                      </div>
-                      <div>
-                        <h4 className="font-medium text-gray-900">Google Calendar</h4>
-                        <p className="text-sm text-gray-600">Sincronize eventos e cronogramas</p>
-                      </div>
-                    </div>
-                    <label className="relative inline-flex items-center cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={settings.integrations.calendar}
-                        onChange={(e) => setSettings({...settings, integrations: {...settings.integrations, calendar: e.target.checked}})}
-                        className="sr-only peer"
-                      />
-                      <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                    </label>
-                  </div>
+                  ))}
                 </div>
               </div>
             </div>

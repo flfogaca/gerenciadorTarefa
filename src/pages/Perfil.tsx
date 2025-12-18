@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import apiService from '../services/api';
 import { 
   User, 
   Mail, 
@@ -13,74 +14,136 @@ import {
   X,
   Camera,
   Download,
-  Share2
+  Share2,
+  Key,
+  AlertCircle
 } from 'lucide-react';
-
-const mockProfile = {
-  personal: {
-    name: 'João Silva',
-    email: 'joao.silva@empresa.com',
-    phone: '(11) 99999-9999',
-    position: 'Gerente de Projetos',
-    department: 'Gestão',
-    location: 'São Paulo, SP',
-    joinDate: '2023-01-15',
-    avatar: 'JD'
-  },
-  stats: {
-    projectsCompleted: 24,
-    projectsActive: 3,
-    tasksCompleted: 156,
-    hoursWorked: 1840,
-    rating: 4.8,
-    achievements: 12
-  },
-  recentActivity: [
-    {
-      id: 1,
-      action: 'Concluiu projeto',
-      project: 'Evento Corporativo Q1',
-      time: '2 horas atrás',
-      type: 'success'
-    },
-    {
-      id: 2,
-      action: 'Atualizou cronograma',
-      project: 'Lançamento Produto',
-      time: '1 dia atrás',
-      type: 'info'
-    },
-    {
-      id: 3,
-      action: 'Adicionou nova tarefa',
-      project: 'Workshop Digital',
-      time: '2 dias atrás',
-      type: 'info'
-    },
-    {
-      id: 4,
-      action: 'Comentou em projeto',
-      project: 'Conferência Anual',
-      time: '3 dias atrás',
-      type: 'comment'
-    }
-  ],
-  skills: [
-    { name: 'Gestão de Projetos', level: 95 },
-    { name: 'Planejamento Estratégico', level: 90 },
-    { name: 'Comunicação', level: 88 },
-    { name: 'Liderança', level: 85 },
-    { name: 'Análise de Dados', level: 80 },
-    { name: 'Negociação', level: 75 }
-  ]
-};
 
 export default function Perfil() {
   const [isEditing, setIsEditing] = useState(false);
-  const [profile, setProfile] = useState(mockProfile);
+  const [profile, setProfile] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const handleSave = () => {
-    setIsEditing(false);
+  useEffect(() => {
+    loadProfile();
+  }, []);
+
+  const loadProfile = async () => {
+    try {
+      setIsLoading(true);
+      const userData = await apiService.getCurrentUser();
+      if (userData) {
+        const [projectsRes, tasksRes] = await Promise.all([
+          apiService.getProjects().catch(() => ({ projects: [] })),
+          apiService.getTasks().catch(() => ({ tasks: [] }))
+        ]);
+        
+        const projects = (projectsRes as any).projects || [];
+        const tasks = (tasksRes as any).tasks || [];
+        const userTasks = tasks.filter((t: any) => 
+          (t.assigneeId || t.assignee?.id || t.assignee?.userId) === (userData.userId || userData.id)
+        );
+        const userProjects = projects.filter((p: any) => 
+          (p.managerId || p.manager?.id) === (userData.userId || userData.id)
+        );
+        
+        const completedProjects = userProjects.filter((p: any) => 
+          p.status === 'COMPLETED' || p.status === 'Concluído'
+        );
+        const activeProjects = userProjects.filter((p: any) => 
+          p.status === 'ACTIVE' || p.status === 'Em Andamento'
+        );
+        const completedTasks = userTasks.filter((t: any) => 
+          t.status === 'DONE' || t.status === 'Concluído'
+        );
+        
+        const totalHours = userTasks.reduce((sum: number, t: any) => 
+          sum + (t.completedHours || 0), 0
+        );
+        
+        setProfile({
+          personal: {
+            name: `${userData.firstName || ''} ${userData.lastName || ''}`.trim() || userData.email || 'Usuário',
+            email: userData.email || '',
+            phone: userData.profile?.phone || '',
+            position: userData.profile?.position || '',
+            department: userData.profile?.department || '',
+            location: userData.profile?.location || '',
+            joinDate: userData.createdAt || new Date().toISOString(),
+            avatar: `${userData.firstName?.[0] || ''}${userData.lastName?.[0] || ''}`.toUpperCase() || 'U'
+          },
+          stats: {
+            projectsCompleted: completedProjects.length,
+            projectsActive: activeProjects.length,
+            tasksCompleted: completedTasks.length,
+            hoursWorked: totalHours,
+            rating: 0,
+            achievements: 0
+          },
+          recentActivity: [],
+          skills: userData.profile?.skills || []
+        });
+      }
+    } catch (error: any) {
+      console.error('Error loading profile:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSave = async () => {
+    if (!profile) return;
+    
+    try {
+      const userData = await apiService.getCurrentUser();
+      if (userData?.id || userData?.userId) {
+        const userId = userData.userId || userData.id;
+        const nameParts = profile.personal.name.split(' ');
+        await apiService.updateUser(userId, {
+          firstName: nameParts[0] || '',
+          lastName: nameParts.slice(1).join(' ') || '',
+          profile: {
+            phone: profile.personal.phone,
+            position: profile.personal.position,
+            department: profile.personal.department,
+            location: profile.personal.location
+          }
+        });
+        setIsEditing(false);
+        await loadProfile();
+      }
+    } catch (error: any) {
+      console.error('Error saving profile:', error);
+      const message = error.response?.data?.message || error.message || 'Erro ao salvar perfil';
+      alert(`Erro ao salvar perfil: ${message}`);
+    }
+  };
+
+  const handleChangePassword = async () => {
+    const currentPassword = prompt('Digite sua senha atual:');
+    const newPassword = prompt('Digite sua nova senha:');
+    const confirmPassword = prompt('Confirme sua nova senha:');
+
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      alert('As senhas não coincidem');
+      return;
+    }
+
+    try {
+      const userData = await apiService.getCurrentUser();
+      if (userData?.id) {
+        await apiService.changePassword(userData.id, currentPassword, newPassword);
+        alert('Senha alterada com sucesso!');
+      }
+    } catch (error: any) {
+      console.error('Error changing password:', error);
+      const message = error.response?.data?.message || error.message || 'Erro ao alterar senha';
+      alert(`Erro ao alterar senha: ${message}`);
+    }
   };
 
   const getActivityIcon = (type: string) => {
@@ -100,6 +163,29 @@ export default function Perfil() {
       default: return 'text-gray-600';
     }
   };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+          <p className="text-gray-600">Carregando perfil...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!profile) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <AlertCircle className="mx-auto text-gray-400 mb-4" size={48} />
+          <h2 className="text-xl font-semibold text-gray-900 mb-2">Erro ao carregar perfil</h2>
+          <p className="text-gray-600 mb-4">Não foi possível carregar as informações do perfil.</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -177,7 +263,7 @@ export default function Perfil() {
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-gray-600">Horas Trabalhadas</span>
-                  <span className="text-sm font-medium text-gray-900">{profile.stats.hoursWorked.toLocaleString('pt-BR')}</span>
+                  <span className="text-sm font-medium text-gray-900">{(profile.stats.hoursWorked || 0).toLocaleString('pt-BR')}</span>
                 </div>
               </div>
             </div>
@@ -307,6 +393,18 @@ export default function Perfil() {
                 )}
               </div>
             </div>
+            
+            {!isEditing && (
+              <div className="mt-6 pt-6 border-t border-gray-200">
+                <button
+                  onClick={handleChangePassword}
+                  className="w-full bg-gray-100 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-200 transition-colors flex items-center justify-center"
+                >
+                  <Key size={18} className="mr-2" />
+                  Alterar Senha
+                </button>
+              </div>
+            )}
           </div>
 
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">

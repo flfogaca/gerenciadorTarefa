@@ -112,9 +112,9 @@ export default function Layout() {
     { name: 'Administrativo', href: '/administrativo', icon: Users, permission: 'administrative:read' },
     { name: 'Relatórios', href: '/relatorios', icon: BarChart3, permission: 'reports:read' },
     { name: 'Templates', href: '/templates', icon: FileText, permission: 'projects:read' },
-    { name: 'Notificações', href: '/notificacoes', icon: Bell, permission: 'tasks:read', alwaysVisible: true },
+    { name: 'Notificações', href: '/notificacoes', icon: Bell, permission: 'notifications:read', alwaysVisible: true },
     { name: 'Perfil', href: '/perfil', icon: User, permission: 'profile:read', alwaysVisible: true },
-    { name: 'Configurações', href: '/configuracoes', icon: Settings, permission: 'profile:read', alwaysVisible: true },
+    { name: 'Configurações', href: '/configuracoes', icon: Settings, permission: 'settings:read', alwaysVisible: true },
   ];
 
   const navigation = allNavigation.filter(item => 

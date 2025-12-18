@@ -1,9 +1,12 @@
 node_modules
-npm-debug.log
 dist
+logs
+*.log
 .env
 .env.local
 .env.*.local
+uploads
+*.md
 .git
 .gitignore
 .vscode
@@ -17,9 +20,4 @@ __tests__
 *.spec.js
 .DS_Store
 Thumbs.db
-logs
-*.log
-uploads
-README.md
-RAILWAY_DEPLOY.md
-*.md
+

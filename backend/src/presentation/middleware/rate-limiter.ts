@@ -40,11 +40,11 @@ export const globalRateLimiter = rateLimit({
 
 export const authRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 5,
+  max: parseInt(process.env['AUTH_RATE_LIMIT_MAX'] || '20', 10),
   keyGenerator: getKeyGenerator('ip'),
   message: {
     error: 'Too Many Requests',
-    message: 'Muitas tentativas de login. Aguarde 15 minutos.',
+    message: 'Rate limit exceeded. Please try again later.',
     retryAfter: 900,
   },
   standardHeaders: true,

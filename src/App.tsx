@@ -198,18 +198,14 @@ function AppRoutes() {
             </ProtectedRoute>
           } />
           <Route path="configuracoes" element={
-            <ProtectedRoute permission="settings:read">
-              <Suspense fallback={<LoadingSpinner />}>
-                <Configuracoes />
-              </Suspense>
-            </ProtectedRoute>
+            <Suspense fallback={<LoadingSpinner />}>
+              <Configuracoes />
+            </Suspense>
           } />
           <Route path="perfil" element={
-            <ProtectedRoute permission="profile:read">
-              <Suspense fallback={<LoadingSpinner />}>
-                <Perfil />
-              </Suspense>
-            </ProtectedRoute>
+            <Suspense fallback={<LoadingSpinner />}>
+              <Perfil />
+            </Suspense>
           } />
           <Route path="relatorios" element={
             <ProtectedRoute permission="reports:read">
@@ -219,11 +215,9 @@ function AppRoutes() {
             </ProtectedRoute>
           } />
           <Route path="notificacoes" element={
-            <ProtectedRoute permission="notifications:read">
-              <Suspense fallback={<LoadingSpinner />}>
-                <Notificacoes />
-              </Suspense>
-            </ProtectedRoute>
+            <Suspense fallback={<LoadingSpinner />}>
+              <Notificacoes />
+            </Suspense>
           } />
           <Route path="templates" element={
             <ProtectedRoute permission="templates:read">

@@ -36,6 +36,13 @@ export function usePermission(user: { role: string; permissions?: PermissionStri
       { resource: 'suppliers', action: 'read' },
       { resource: 'suppliers', action: 'update' },
       { resource: 'suppliers', action: 'delete' },
+      { resource: 'settings', action: 'read' },
+      { resource: 'settings', action: 'update' },
+      { resource: 'notifications', action: 'read' },
+      { resource: 'profile', action: 'read' },
+      { resource: 'profile', action: 'update' },
+      { resource: 'team', action: 'read' },
+      { resource: 'templates', action: 'read' },
     ],
     MANAGER: [
       { resource: 'projects', action: 'create' },
@@ -57,6 +64,12 @@ export function usePermission(user: { role: string; permissions?: PermissionStri
       { resource: 'suppliers', action: 'create' },
       { resource: 'suppliers', action: 'read' },
       { resource: 'suppliers', action: 'update' },
+      { resource: 'settings', action: 'read' },
+      { resource: 'notifications', action: 'read' },
+      { resource: 'profile', action: 'read' },
+      { resource: 'profile', action: 'update' },
+      { resource: 'team', action: 'read' },
+      { resource: 'templates', action: 'read' },
     ],
     EMPLOYEE: [
       { resource: 'tasks', action: 'read' },
@@ -68,6 +81,9 @@ export function usePermission(user: { role: string; permissions?: PermissionStri
       { resource: 'profile', action: 'update' },
       { resource: 'clients', action: 'read' },
       { resource: 'suppliers', action: 'read' },
+      { resource: 'settings', action: 'read' },
+      { resource: 'notifications', action: 'read' },
+      { resource: 'templates', action: 'read' },
     ],
     CLIENT: [
       { resource: 'projects', action: 'read' },
@@ -77,6 +93,9 @@ export function usePermission(user: { role: string; permissions?: PermissionStri
       { resource: 'profile', action: 'update' },
       { resource: 'clients', action: 'read' },
       { resource: 'suppliers', action: 'read' },
+      { resource: 'settings', action: 'read' },
+      { resource: 'notifications', action: 'read' },
+      { resource: 'templates', action: 'read' },
     ],
   };
 

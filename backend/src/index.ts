@@ -54,32 +54,45 @@ class Application {
   private io: SocketIOServer;
   private container: any;
   private logger: Logger;
-  private databaseService: IDatabaseService;
+  private databaseService: IDatabaseService | null;
 
   constructor() {
-    this.app = express();
-    this.httpServer = createServer(this.app);
-    this.io = new SocketIOServer(this.httpServer, {
-      cors: {
-        origin: process.env['ALLOWED_ORIGINS']?.split(',') || [
-          'http://localhost:3000',
-          'http://localhost:5173',
-          'http://localhost:3001'
-        ],
-        methods: ['GET', 'POST'],
-        credentials: true
+    try {
+      this.app = express();
+      this.httpServer = createServer(this.app);
+      this.io = new SocketIOServer(this.httpServer, {
+        cors: {
+          origin: process.env['ALLOWED_ORIGINS']?.split(',') || [
+            'http://localhost:3000',
+            'http://localhost:5173',
+            'http://localhost:3001'
+          ],
+          methods: ['GET', 'POST'],
+          credentials: true
+        }
+      });
+      
+      this.configureHealthCheckRoutes();
+      
+      try {
+        this.container = DIContainer.getContainer();
+        this.logger = this.container.get(TYPES.Logger);
+        this.databaseService = this.container.get(TYPES.DatabaseService);
+      } catch (error) {
+        console.error('⚠️ Erro ao inicializar container DI, usando fallback:', error);
+        this.logger = new (require('@/shared/logging/logger').Logger)();
+        this.databaseService = null;
       }
-    });
-    this.container = DIContainer.getContainer();
-    this.logger = this.container.get(TYPES.Logger);
-    this.databaseService = this.container.get(TYPES.DatabaseService);
-    
-    this.configureHealthCheckRoutes();
-    this.configureSentry();
-    this.configureMiddleware();
-    this.configureSocketIO();
-    this.configureRoutes();
-    this.configureErrorHandling();
+      
+      this.configureSentry();
+      this.configureMiddleware();
+      this.configureSocketIO();
+      this.configureRoutes();
+      this.configureErrorHandling();
+    } catch (error) {
+      console.error('❌ Erro crítico no construtor:', error);
+      throw error;
+    }
   }
 
   private configureSentry(): void {
@@ -185,20 +198,11 @@ class Application {
 
   private configureHealthCheckRoutes(): void {
     this.app.get('/health', (_req, res) => {
-      console.log('Health check called: /health');
       res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
     });
     
     this.app.get('/api/v1/health', (_req, res) => {
-      console.log('Health check called: /api/v1/health');
       res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
-    });
-    
-    this.app.get('*', (req, res, next) => {
-      if (req.path === '/health' || req.path === '/api/v1/health') {
-        return next();
-      }
-      next();
     });
   }
 
@@ -311,42 +315,52 @@ class Application {
       console.log('✅ Servidor está escutando!');
     });
 
-    setTimeout(async () => {
-      try {
-        console.log('🔌 Tentando conectar ao banco de dados...');
-        await this.databaseService.connect();
-        this.logger.info('Database connected successfully');
-        console.log('✅ Banco de dados conectado!');
+    if (this.databaseService) {
+      setTimeout(async () => {
+        try {
+          console.log('🔌 Tentando conectar ao banco de dados...');
+          if (this.databaseService) {
+            await this.databaseService.connect();
+          }
+          this.logger.info('Database connected successfully');
+          console.log('✅ Banco de dados conectado!');
 
-        console.log('🔄 Executando migrações...');
-        const { spawnSync } = require('child_process');
-        const migrateResult = spawnSync('npx', ['prisma', 'migrate', 'deploy'], {
-          stdio: 'inherit',
-          env: process.env
-        });
-        
-        if (migrateResult.status === 0) {
-          this.logger.info('Database migrations completed');
-          console.log('✅ Migrações concluídas!');
-        } else {
-          console.log('⚠️ Migrações falharam, mas servidor continua rodando');
+          console.log('🔄 Executando migrações...');
+          const { spawnSync } = require('child_process');
+          const migrateResult = spawnSync('npx', ['prisma', 'migrate', 'deploy'], {
+            stdio: 'inherit',
+            env: process.env
+          });
+          
+          if (migrateResult.status === 0) {
+            this.logger.info('Database migrations completed');
+            console.log('✅ Migrações concluídas!');
+          } else {
+            console.log('⚠️ Migrações falharam, mas servidor continua rodando');
+          }
+        } catch (error) {
+          console.error('⚠️ Erro ao conectar ao banco:', error);
+          if (this.logger) {
+            this.logger.error('Failed to connect to database', {
+              error: (error as Error).message,
+              stack: (error as Error).stack
+            });
+            this.logger.warn('Server started but database connection failed. Some features may not work.');
+          }
         }
-      } catch (error) {
-        console.error('⚠️ Erro ao conectar ao banco:', error);
-        this.logger.error('Failed to connect to database', {
-          error: (error as Error).message,
-          stack: (error as Error).stack
-        });
-        this.logger.warn('Server started but database connection failed. Some features may not work.');
-      }
-    }, 2000);
+      }, 2000);
+    } else {
+      console.log('⚠️ DatabaseService não disponível, servidor rodando sem banco');
+    }
   }
 
   public async stop(): Promise<void> {
     try {
       this.io.close();
       this.httpServer.close();
-      await this.databaseService.disconnect();
+      if (this.databaseService) {
+        await this.databaseService.disconnect();
+      }
       this.logger.info('Application stopped gracefully');
     } catch (error) {
       this.logger.error('Error stopping application', {

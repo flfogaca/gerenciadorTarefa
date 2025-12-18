@@ -4,14 +4,14 @@ WORKDIR /app
 
 RUN apk add --no-cache openssl
 
-COPY backend/package*.json ./
-COPY backend/prisma ./prisma/
+COPY package*.json ./
+COPY prisma ./prisma/
 
 RUN npm ci
 
 RUN npx prisma generate
 
-COPY backend/ .
+COPY . .
 
 RUN npm run build
 

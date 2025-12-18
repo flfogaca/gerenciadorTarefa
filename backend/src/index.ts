@@ -274,7 +274,7 @@ class Application {
       this.logger.info('Database migrations completed');
 
       // Iniciar servidor
-      const port = process.env['PORT'] || 3001;
+      const port = parseInt(process.env['PORT'] || '3001', 10);
       const host = process.env['HOST'] || '0.0.0.0';
       console.log(`🔧 Iniciando servidor na porta ${port}...`);
       

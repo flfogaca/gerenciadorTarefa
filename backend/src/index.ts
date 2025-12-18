@@ -278,7 +278,7 @@ class Application {
     const port = parseInt(process.env['PORT'] || '3001', 10);
     const host = process.env['HOST'] || '0.0.0.0';
     
-    return new Promise((resolve, reject) => {
+    return new Promise<void>((resolve, reject) => {
       this.httpServer.listen(port, host, () => {
         this.logger.info(`Server running on ${host}:${port}`);
         this.logger.info(`Environment: ${process.env['NODE_ENV'] || 'development'}`);
@@ -288,7 +288,7 @@ class Application {
         console.log(`🏥 Health check disponível em: http://${host}:${port}/health`);
         console.log(`📊 API disponível em: http://${host}:${port}/api/v1`);
         console.log(`🔗 Health da API: http://${host}:${port}/api/v1/health`);
-        resolve();
+        resolve(undefined);
       });
 
       this.httpServer.on('error', (error: Error) => {

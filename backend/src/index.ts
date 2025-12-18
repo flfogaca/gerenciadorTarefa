@@ -74,6 +74,7 @@ class Application {
     this.logger = this.container.get(TYPES.Logger);
     this.databaseService = this.container.get(TYPES.DatabaseService);
     
+    this.configureHealthCheckRoutes();
     this.configureSentry();
     this.configureMiddleware();
     this.configureSocketIO();
@@ -127,14 +128,15 @@ class Application {
 
     // Rate Limiting
     const limiter = rateLimit({
-      windowMs: 15 * 60 * 1000, // 15 minutos
-      max: 100, // máximo 100 requests por IP por janela
+      windowMs: 15 * 60 * 1000,
+      max: 100,
       message: {
         error: 'Too many requests',
         message: 'Rate limit exceeded. Please try again later.'
       },
       standardHeaders: true,
       legacyHeaders: false,
+      skip: (req) => req.path === '/health' || req.path === '/api/v1/health' || req.path.startsWith('/health/'),
     });
     this.app.use(limiter);
 
@@ -181,7 +183,7 @@ class Application {
     this.app.use(AuditMiddleware.create());
   }
 
-  private configureRoutes(): void {
+  private configureHealthCheckRoutes(): void {
     this.app.get('/health', (_req, res) => {
       res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
     });
@@ -189,7 +191,9 @@ class Application {
     this.app.get('/api/v1/health', (_req, res) => {
       res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
     });
-    
+  }
+
+  private configureRoutes(): void {
     const { healthCheck, livenessCheck, readinessCheck } = require('@/presentation/middleware/health-check');
     this.app.get('/health/detailed', healthCheck);
     this.app.get('/health/live', livenessCheck);
@@ -274,30 +278,38 @@ class Application {
     const port = parseInt(process.env['PORT'] || '3001', 10);
     const host = process.env['HOST'] || '0.0.0.0';
     
-    this.httpServer.listen(port, host, () => {
-      this.logger.info(`Server running on ${host}:${port}`);
-      this.logger.info(`Environment: ${process.env['NODE_ENV'] || 'development'}`);
-      console.log(`✅ Servidor iniciado com sucesso na porta ${port}!`);
-      console.log(`🚀 Backend rodando em: http://${host}:${port}`);
-      console.log(`🔌 WebSocket/Socket.IO disponível em: ws://${host}:${port}/socket.io`);
-      console.log(`🏥 Health check disponível em: http://${host}:${port}/health`);
-      console.log(`📊 API disponível em: http://${host}:${port}/api/v1`);
-      console.log(`🔗 Health da API: http://${host}:${port}/api/v1/health`);
-    });
-
-    try {
-      await this.databaseService.connect();
-      this.logger.info('Database connected successfully');
-
-      await this.databaseService.runMigrations();
-      this.logger.info('Database migrations completed');
-    } catch (error) {
-      this.logger.error('Failed to connect to database', {
-        error: (error as Error).message,
-        stack: (error as Error).stack
+    return new Promise((resolve, reject) => {
+      this.httpServer.listen(port, host, () => {
+        this.logger.info(`Server running on ${host}:${port}`);
+        this.logger.info(`Environment: ${process.env['NODE_ENV'] || 'development'}`);
+        console.log(`✅ Servidor iniciado com sucesso na porta ${port}!`);
+        console.log(`🚀 Backend rodando em: http://${host}:${port}`);
+        console.log(`🔌 WebSocket/Socket.IO disponível em: ws://${host}:${port}/socket.io`);
+        console.log(`🏥 Health check disponível em: http://${host}:${port}/health`);
+        console.log(`📊 API disponível em: http://${host}:${port}/api/v1`);
+        console.log(`🔗 Health da API: http://${host}:${port}/api/v1/health`);
+        resolve();
       });
-      this.logger.warn('Server started but database connection failed. Some features may not work.');
-    }
+
+      this.httpServer.on('error', (error: Error) => {
+        this.logger.error('Server error', { error: error.message });
+        reject(error);
+      });
+    }).then(async () => {
+      try {
+        await this.databaseService.connect();
+        this.logger.info('Database connected successfully');
+
+        await this.databaseService.runMigrations();
+        this.logger.info('Database migrations completed');
+      } catch (error) {
+        this.logger.error('Failed to connect to database', {
+          error: (error as Error).message,
+          stack: (error as Error).stack
+        });
+        this.logger.warn('Server started but database connection failed. Some features may not work.');
+      }
+    });
   }
 
   public async stop(): Promise<void> {

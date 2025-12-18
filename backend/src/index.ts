@@ -319,9 +319,18 @@ class Application {
         console.log('✅ Banco de dados conectado!');
 
         console.log('🔄 Executando migrações...');
-        await this.databaseService.runMigrations();
-        this.logger.info('Database migrations completed');
-        console.log('✅ Migrações concluídas!');
+        const { spawnSync } = require('child_process');
+        const migrateResult = spawnSync('npx', ['prisma', 'migrate', 'deploy'], {
+          stdio: 'inherit',
+          env: process.env
+        });
+        
+        if (migrateResult.status === 0) {
+          this.logger.info('Database migrations completed');
+          console.log('✅ Migrações concluídas!');
+        } else {
+          console.log('⚠️ Migrações falharam, mas servidor continua rodando');
+        }
       } catch (error) {
         console.error('⚠️ Erro ao conectar ao banco:', error);
         this.logger.error('Failed to connect to database', {
@@ -330,7 +339,7 @@ class Application {
         });
         this.logger.warn('Server started but database connection failed. Some features may not work.');
       }
-    }, 1000);
+    }, 2000);
   }
 
   public async stop(): Promise<void> {

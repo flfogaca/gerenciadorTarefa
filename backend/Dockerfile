@@ -43,4 +43,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
 
 ENTRYPOINT ["dumb-init", "--"]
 
-CMD ["sh", "-c", "npx prisma migrate deploy || true && node dist/index.js"]
+CMD ["node", "dist/index.js"]

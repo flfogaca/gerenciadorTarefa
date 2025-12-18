@@ -278,24 +278,23 @@ class Application {
     const port = parseInt(process.env['PORT'] || '3001', 10);
     const host = process.env['HOST'] || '0.0.0.0';
     
-    return new Promise<void>((resolve, reject) => {
-      this.httpServer.listen(port, host, () => {
-        this.logger.info(`Server running on ${host}:${port}`);
-        this.logger.info(`Environment: ${process.env['NODE_ENV'] || 'development'}`);
-        console.log(`✅ Servidor iniciado com sucesso na porta ${port}!`);
-        console.log(`🚀 Backend rodando em: http://${host}:${port}`);
-        console.log(`🔌 WebSocket/Socket.IO disponível em: ws://${host}:${port}/socket.io`);
-        console.log(`🏥 Health check disponível em: http://${host}:${port}/health`);
-        console.log(`📊 API disponível em: http://${host}:${port}/api/v1`);
-        console.log(`🔗 Health da API: http://${host}:${port}/api/v1/health`);
-        resolve(undefined);
-      });
+    this.httpServer.listen(port, host, () => {
+      this.logger.info(`Server running on ${host}:${port}`);
+      this.logger.info(`Environment: ${process.env['NODE_ENV'] || 'development'}`);
+      console.log(`✅ Servidor iniciado com sucesso na porta ${port}!`);
+      console.log(`🚀 Backend rodando em: http://${host}:${port}`);
+      console.log(`🔌 WebSocket/Socket.IO disponível em: ws://${host}:${port}/socket.io`);
+      console.log(`🏥 Health check disponível em: http://${host}:${port}/health`);
+      console.log(`📊 API disponível em: http://${host}:${port}/api/v1`);
+      console.log(`🔗 Health da API: http://${host}:${port}/api/v1/health`);
+    });
 
-      this.httpServer.on('error', (error: Error) => {
-        this.logger.error('Server error', { error: error.message });
-        reject(error);
-      });
-    }).then(async () => {
+    this.httpServer.on('error', (error: Error) => {
+      this.logger.error('Server error', { error: error.message });
+      process.exit(1);
+    });
+
+    setTimeout(async () => {
       try {
         await this.databaseService.connect();
         this.logger.info('Database connected successfully');
@@ -309,7 +308,7 @@ class Application {
         });
         this.logger.warn('Server started but database connection failed. Some features may not work.');
       }
-    });
+    }, 1000);
   }
 
   public async stop(): Promise<void> {
@@ -370,6 +369,12 @@ process.on('SIGINT', async () => {
 console.log('🚀 Iniciando aplicação GestorPro Backend...');
 app.start().catch((error) => {
   console.error('❌ Failed to start application:', error);
+  console.error('Error details:', error);
+  process.exit(1);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
   process.exit(1);
 });
 

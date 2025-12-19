@@ -126,41 +126,32 @@ export default function GerenciarProjetos() {
     try {
       await apiService.changeProjectStatus(projectId, apiStatus);
       
-      queryClient.setQueryData(['projects'], (oldData: any) => {
-        if (!oldData) return oldData;
-        return oldData.map((p: any) => {
-          const pId = (p as any).projectId || p.id;
-          if (pId === projectId) {
-            return {
-              ...p,
-              status: normalizedStatus
-            };
-          }
-          return p;
-        });
-      });
+      queryClient.removeQueries({ queryKey: ['projects'] });
       
-      queryClient.invalidateQueries({ 
-        queryKey: ['projects'], 
-        exact: false,
-        refetchType: 'all'
-      });
+      await new Promise(resolve => setTimeout(resolve, 500));
       
-      queryClient.invalidateQueries({ 
-        queryKey: ['project', projectId], 
-        exact: false,
-        refetchType: 'all'
-      });
+      const refetchResult = await refetch({ cancelRefetch: true });
       
-      const freshData = await refetch({ cancelRefetch: true });
-      
-      if (freshData?.data) {
-        const mappedData = (freshData.data as any[]).map((p: any) => ({
+      if (refetchResult?.data) {
+        const mappedProjects = (refetchResult.data as any[]).map((p: any) => ({
           ...p,
           status: mapStatusFromApi(p.status || '')
         }));
-        queryClient.setQueryData(['projects'], mappedData);
+        queryClient.setQueryData(['projects'], mappedProjects);
+      } else {
+        const freshProjectsResponse = await apiService.getProjects();
+        const projectsList = (freshProjectsResponse as any)?.data?.projects || (freshProjectsResponse as any)?.projects || [];
+        const mappedProjects = projectsList.map((p: any) => ({
+          ...p,
+          status: mapStatusFromApi(p.status || '')
+        }));
+        queryClient.setQueryData(['projects'], mappedProjects);
       }
+      
+      queryClient.invalidateQueries({ 
+        queryKey: ['project', projectId], 
+        exact: false
+      });
       
       showToast.success('Status do projeto atualizado com sucesso!');
     } catch (error: any) {

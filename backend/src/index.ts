@@ -240,27 +240,27 @@ class Application {
 
   private configureHealthCheckRoutes(): void {
     this.app.get('/health', (_req, res) => {
-      res.status(200).json({ 
+      res.status(200).setHeader('Content-Type', 'application/json').end(JSON.stringify({ 
         status: 'ok', 
         timestamp: new Date().toISOString(),
         uptime: process.uptime()
-      });
+      }));
     });
     
     this.app.get('/api/v1/health', (_req, res) => {
-      res.status(200).json({ 
+      res.status(200).setHeader('Content-Type', 'application/json').end(JSON.stringify({ 
         status: 'ok', 
         timestamp: new Date().toISOString(),
         uptime: process.uptime()
-      });
+      }));
     });
     
     this.app.get('/health/live', (_req, res) => {
-      res.status(200).json({ status: 'alive' });
+      res.status(200).setHeader('Content-Type', 'application/json').end(JSON.stringify({ status: 'alive' }));
     });
     
     this.app.get('/health/ready', (_req, res) => {
-      res.status(200).json({ status: 'ready' });
+      res.status(200).setHeader('Content-Type', 'application/json').end(JSON.stringify({ status: 'ready' }));
     });
   }
 
@@ -371,6 +371,10 @@ class Application {
       console.log(`📊 API disponível em: http://${host}:${port}/api/v1`);
       console.log(`🔗 Health da API: http://${host}:${port}/api/v1/health`);
       
+      setTimeout(() => {
+        resolve();
+      }, 500);
+      
       if (this.databaseService) {
         setTimeout(async () => {
           try {
@@ -404,12 +408,10 @@ class Application {
               this.logger.warn('Server started but database connection failed. Some features may not work.');
             }
           }
-        }, 1000);
+        }, 2000);
       } else {
         console.log('⚠️ DatabaseService não disponível, servidor rodando sem banco');
       }
-      
-      resolve();
     });
       
     this.httpServer.listen(port, host);

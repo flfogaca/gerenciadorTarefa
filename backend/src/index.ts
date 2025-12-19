@@ -73,7 +73,13 @@ class Application {
         res.end('{"status":"ok"}');
       });
       
-      this.httpServer = createServer(this.app);
+      this.httpServer = createServer((req, res) => {
+        if (req.url === '/health' || req.url === '/api/v1/health') {
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          return res.end('{"status":"ok"}');
+        }
+        this.app(req, res);
+      });
       this.io = new SocketIOServer(this.httpServer, {
         cors: {
           origin: process.env['ALLOWED_ORIGINS']?.split(',') || [
@@ -390,12 +396,10 @@ class Application {
       console.log(`📊 API disponível em: http://${host}:${port}/api/v1`);
       console.log(`🔗 Health da API: http://${host}:${port}/api/v1/health`);
       
-      setImmediate(() => {
-        resolve();
-      });
+      resolve();
       
       if (this.databaseService) {
-        setTimeout(async () => {
+        setImmediate(async () => {
           try {
             console.log('🔌 Tentando conectar ao banco de dados...');
             if (this.databaseService) {
@@ -427,7 +431,7 @@ class Application {
               this.logger.warn('Server started but database connection failed. Some features may not work.');
             }
           }
-        }, 500);
+        });
       } else {
         console.log('⚠️ DatabaseService não disponível, servidor rodando sem banco');
       }

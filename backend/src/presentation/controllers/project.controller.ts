@@ -427,6 +427,14 @@ export class ProjectController {
     try {
       const { projectId } = req.params;
 
+      if (!projectId) {
+        res.status(400).json({
+          error: 'Bad Request',
+          message: 'Project ID is required'
+        });
+        return;
+      }
+
       const validationResult = await this.validationService.validate(this.changeStatusSchema, req.body);
       
       if (!validationResult.isValid) {

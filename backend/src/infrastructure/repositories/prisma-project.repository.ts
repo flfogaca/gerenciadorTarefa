@@ -356,7 +356,7 @@ export class PrismaProjectRepository implements IProjectRepository {
         let completedAt: Date | undefined;
         if (m.completedAt) {
           completedAt = m.completedAt instanceof Date ? m.completedAt : new Date(m.completedAt);
-          if (isNaN(completedAt.getTime())) {
+          if (completedAt && isNaN(completedAt.getTime())) {
             completedAt = undefined;
           }
         }

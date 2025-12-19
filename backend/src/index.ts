@@ -64,17 +64,13 @@ class Application {
       this.app.set('trust proxy', true);
       
       this.app.get('/health', (_req, res) => {
-        res.status(200).setHeader('Content-Type', 'application/json').end(JSON.stringify({ 
-          status: 'ok', 
-          timestamp: new Date().toISOString()
-        }));
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end('{"status":"ok"}');
       });
       
       this.app.get('/api/v1/health', (_req, res) => {
-        res.status(200).setHeader('Content-Type', 'application/json').end(JSON.stringify({ 
-          status: 'ok', 
-          timestamp: new Date().toISOString()
-        }));
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end('{"status":"ok"}');
       });
       
       this.httpServer = createServer(this.app);
@@ -131,9 +127,11 @@ class Application {
   }
 
   private configureMiddleware(): void {
+    // Health check deve bypassar TUDO
     this.app.use((req, res, next) => {
       if (req.path === '/health' || req.path === '/api/v1/health') {
-        return next();
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        return res.end('{"status":"ok"}');
       }
       next();
     });

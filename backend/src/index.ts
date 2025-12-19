@@ -182,9 +182,11 @@ class Application {
   }
 
   private configureCORS(): void {
+    const allowedOriginsRaw = process.env['ALLOWED_ORIGINS'] || '';
+    console.log('🔐 CORS - ALLOWED_ORIGINS raw:', allowedOriginsRaw);
+    
     this.app.use(cors({
       origin: (origin, callback) => {
-        const allowedOriginsRaw = process.env['ALLOWED_ORIGINS'] || '';
         const allowedOrigins = allowedOriginsRaw
           .split(',')
           .map(url => url.trim())
@@ -200,6 +202,7 @@ class Application {
         ];
         
         const allOrigins = allowedOrigins.length > 0 ? allowedOrigins : defaultOrigins;
+        console.log('🔐 CORS - Origins permitidas:', allOrigins.join(', '));
         
         if (!origin) {
           callback(null, true);

@@ -76,7 +76,8 @@ class Application {
       this.httpServer = createServer((req, res) => {
         if (req.url === '/health' || req.url === '/api/v1/health') {
           res.writeHead(200, { 'Content-Type': 'application/json' });
-          return res.end('{"status":"ok"}');
+          res.end('{"status":"ok"}');
+          return;
         }
         this.app(req, res);
       });
@@ -492,10 +493,18 @@ process.on('uncaughtException', (error: Error) => {
 });
 
 // Graceful shutdown
+let isShuttingDown = false;
 process.on('SIGTERM', async () => {
+  if (isShuttingDown) {
+    console.log('⚠️ SIGTERM recebido novamente, ignorando...');
+    return;
+  }
+  isShuttingDown = true;
   console.log('SIGTERM received, shutting down gracefully');
-  await app.stop();
-  process.exit(0);
+  setTimeout(async () => {
+    await app.stop();
+    process.exit(0);
+  }, 5000);
 });
 
 process.on('SIGINT', async () => {

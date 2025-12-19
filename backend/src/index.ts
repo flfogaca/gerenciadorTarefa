@@ -60,6 +60,9 @@ class Application {
   constructor() {
     try {
       this.app = express();
+      
+      this.app.set('trust proxy', true);
+      
       this.httpServer = createServer(this.app);
       this.io = new SocketIOServer(this.httpServer, {
         cors: {

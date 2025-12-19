@@ -505,11 +505,18 @@ console.log('🚀 Iniciando aplicação GestorPro Backend...');
 app.start()
   .then(() => {
     console.log('✅ Aplicação iniciada com sucesso e pronta para receber requisições');
+    console.log('✅ Servidor está ativo e respondendo requisições');
   })
   .catch((error) => {
     console.error('❌ Failed to start application:', error);
     console.error('Error details:', error);
     process.exit(1);
   });
+
+// Manter processo vivo
+process.on('SIGTERM', () => {
+  console.log('⚠️ SIGTERM recebido, mas servidor deve continuar rodando...');
+  console.log('⚠️ Se você está vendo isso, o Railway pode estar matando o container muito rápido');
+});
 
 export default app;

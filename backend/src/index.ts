@@ -526,10 +526,4 @@ app.start()
     process.exit(1);
   });
 
-// Manter processo vivo
-process.on('SIGTERM', () => {
-  console.log('⚠️ SIGTERM recebido, mas servidor deve continuar rodando...');
-  console.log('⚠️ Se você está vendo isso, o Railway pode estar matando o container muito rápido');
-});
-
 export default app;

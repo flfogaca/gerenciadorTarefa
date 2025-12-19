@@ -442,21 +442,28 @@ const app = new Application();
 // Tratamento de erros não capturados
 process.on('unhandledRejection', (reason: any, promise: Promise<any>) => {
   console.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
-  const logger = new (require('@/shared/logging/logger').Logger)();
-  logger.error('Unhandled promise rejection', {
-    reason: reason instanceof Error ? reason.message : String(reason),
-    stack: reason instanceof Error ? reason.stack : undefined
-  });
+  try {
+    const logger = new (require('@/shared/logging/logger').Logger)();
+    logger.error('Unhandled promise rejection', {
+      reason: reason instanceof Error ? reason.message : String(reason),
+      stack: reason instanceof Error ? reason.stack : undefined
+    });
+  } catch (e) {
+    console.error('Erro ao logar unhandled rejection:', e);
+  }
 });
 
 process.on('uncaughtException', (error: Error) => {
   console.error('❌ Uncaught Exception:', error);
-  const logger = new (require('@/shared/logging/logger').Logger)();
-  logger.error('Uncaught exception', {
-    error: error.message,
-    stack: error.stack
-  });
-  process.exit(1);
+  try {
+    const logger = new (require('@/shared/logging/logger').Logger)();
+    logger.error('Uncaught exception', {
+      error: error.message,
+      stack: error.stack
+    });
+  } catch (e) {
+    console.error('Erro ao logar uncaught exception:', e);
+  }
 });
 
 // Graceful shutdown
@@ -486,7 +493,11 @@ app.start()
 
 process.on('unhandledRejection', (reason, promise) => {
   console.error('Unhandled Rejection at:', promise, 'reason:', reason);
-  process.exit(1);
+  const logger = new (require('@/shared/logging/logger').Logger)();
+  logger.error('Unhandled promise rejection', {
+    reason: reason instanceof Error ? reason.message : String(reason),
+    stack: reason instanceof Error ? reason.stack : undefined
+  });
 });
 
 export default app;

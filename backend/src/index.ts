@@ -74,9 +74,24 @@ class Application {
       });
       
       this.httpServer = createServer((req, res) => {
-        if (req.url === '/health' || req.url === '/api/v1/health') {
-          res.writeHead(200, { 'Content-Type': 'application/json' });
+        const url = req.url || '';
+        if (url === '/health' || url === '/api/v1/health' || url.startsWith('/health')) {
+          res.writeHead(200, { 
+            'Content-Type': 'application/json',
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'GET, OPTIONS',
+            'Access-Control-Allow-Headers': 'Content-Type'
+          });
           res.end('{"status":"ok"}');
+          return;
+        }
+        if (req.method === 'OPTIONS') {
+          res.writeHead(200, {
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+            'Access-Control-Allow-Headers': 'Content-Type, Authorization'
+          });
+          res.end();
           return;
         }
         this.app(req, res);
@@ -397,7 +412,9 @@ class Application {
       console.log(`📊 API disponível em: http://${host}:${port}/api/v1`);
       console.log(`🔗 Health da API: http://${host}:${port}/api/v1/health`);
       
-      resolve();
+      setTimeout(() => {
+        resolve();
+      }, 100);
       
       if (this.databaseService) {
         setImmediate(async () => {

@@ -63,7 +63,19 @@ class Application {
       
       this.app.set('trust proxy', true);
       
-      this.configureHealthCheckRoutes();
+      this.app.get('/health', (_req, res) => {
+        res.status(200).setHeader('Content-Type', 'application/json').end(JSON.stringify({ 
+          status: 'ok', 
+          timestamp: new Date().toISOString()
+        }));
+      });
+      
+      this.app.get('/api/v1/health', (_req, res) => {
+        res.status(200).setHeader('Content-Type', 'application/json').end(JSON.stringify({ 
+          status: 'ok', 
+          timestamp: new Date().toISOString()
+        }));
+      });
       
       this.httpServer = createServer(this.app);
       this.io = new SocketIOServer(this.httpServer, {
@@ -79,6 +91,7 @@ class Application {
       });
       
       this.configureCORS();
+      this.configureHealthCheckRoutes();
       
       try {
         this.container = DIContainer.getContainer();
@@ -371,12 +384,10 @@ class Application {
       console.log(`📊 API disponível em: http://${host}:${port}/api/v1`);
       console.log(`🔗 Health da API: http://${host}:${port}/api/v1/health`);
       
-      setTimeout(() => {
-        resolve();
-      }, 500);
+      resolve();
       
       if (this.databaseService) {
-        setTimeout(async () => {
+        setImmediate(async () => {
           try {
             console.log('🔌 Tentando conectar ao banco de dados...');
             if (this.databaseService) {
@@ -408,7 +419,7 @@ class Application {
               this.logger.warn('Server started but database connection failed. Some features may not work.');
             }
           }
-        }, 2000);
+        });
       } else {
         console.log('⚠️ DatabaseService não disponível, servidor rodando sem banco');
       }

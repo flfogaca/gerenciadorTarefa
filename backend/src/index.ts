@@ -491,13 +491,4 @@ app.start()
     process.exit(1);
   });
 
-process.on('unhandledRejection', (reason, promise) => {
-  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
-  const logger = new (require('@/shared/logging/logger').Logger)();
-  logger.error('Unhandled promise rejection', {
-    reason: reason instanceof Error ? reason.message : String(reason),
-    stack: reason instanceof Error ? reason.stack : undefined
-  });
-});
-
 export default app;

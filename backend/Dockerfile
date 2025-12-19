@@ -19,7 +19,7 @@ FROM node:20-alpine AS production
 
 WORKDIR /app
 
-RUN apk add --no-cache openssl dumb-init
+RUN apk add --no-cache openssl dumb-init curl
 
 RUN addgroup -g 1001 -S nodejs && \
     adduser -S nodejs -u 1001
@@ -38,8 +38,8 @@ ENV NODE_ENV=production
 
 EXPOSE 3001
 
-HEALTHCHECK --interval=10s --timeout=3s --start-period=20s --retries=3 \
-    CMD wget --no-verbose --tries=1 --spider http://localhost:${PORT:-3001}/health || exit 1
+HEALTHCHECK --interval=10s --timeout=3s --start-period=15s --retries=3 \
+    CMD curl -f http://localhost:${PORT:-8080}/health || exit 1
 
 ENTRYPOINT ["dumb-init", "--"]
 

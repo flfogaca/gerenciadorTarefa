@@ -239,11 +239,27 @@ class Application {
 
   private configureHealthCheckRoutes(): void {
     this.app.get('/health', (_req, res) => {
-      res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
+      res.status(200).json({ 
+        status: 'ok', 
+        timestamp: new Date().toISOString(),
+        uptime: process.uptime()
+      });
     });
     
     this.app.get('/api/v1/health', (_req, res) => {
-      res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
+      res.status(200).json({ 
+        status: 'ok', 
+        timestamp: new Date().toISOString(),
+        uptime: process.uptime()
+      });
+    });
+    
+    this.app.get('/health/live', (_req, res) => {
+      res.status(200).json({ status: 'alive' });
+    });
+    
+    this.app.get('/health/ready', (_req, res) => {
+      res.status(200).json({ status: 'ready' });
     });
   }
 
@@ -330,12 +346,20 @@ class Application {
   }
 
   public async start(): Promise<void> {
-    const port = parseInt(process.env['PORT'] || '3001', 10);
-    const host = process.env['HOST'] || '0.0.0.0';
-    
-    console.log(`🔧 Configurando servidor na porta ${port}, host ${host}...`);
-    
-    this.httpServer.listen(port, host, () => {
+    return new Promise((resolve, reject) => {
+      const port = parseInt(process.env['PORT'] || '3001', 10);
+      const host = process.env['HOST'] || '0.0.0.0';
+      
+      console.log(`🔧 Configurando servidor na porta ${port}, host ${host}...`);
+      
+      this.httpServer.on('error', (error: Error) => {
+        console.error('❌ Erro ao iniciar servidor:', error);
+        this.logger.error('Server error', { error: error.message });
+        reject(error);
+      });
+
+    this.httpServer.on('listening', () => {
+      console.log('✅ Servidor está escutando!');
       console.log(`✅ Servidor HTTP escutando em ${host}:${port}`);
       this.logger.info(`Server running on ${host}:${port}`);
       this.logger.info(`Environment: ${process.env['NODE_ENV'] || 'development'}`);
@@ -345,55 +369,50 @@ class Application {
       console.log(`🏥 Health check disponível em: http://${host}:${port}/health`);
       console.log(`📊 API disponível em: http://${host}:${port}/api/v1`);
       console.log(`🔗 Health da API: http://${host}:${port}/api/v1/health`);
-    });
+      
+      if (this.databaseService) {
+        setTimeout(async () => {
+          try {
+            console.log('🔌 Tentando conectar ao banco de dados...');
+            if (this.databaseService) {
+              await this.databaseService.connect();
+            }
+            this.logger.info('Database connected successfully');
+            console.log('✅ Banco de dados conectado!');
 
-    this.httpServer.on('error', (error: Error) => {
-      console.error('❌ Erro ao iniciar servidor:', error);
-      this.logger.error('Server error', { error: error.message });
-      process.exit(1);
-    });
-
-    this.httpServer.on('listening', () => {
-      console.log('✅ Servidor está escutando!');
-    });
-
-    if (this.databaseService) {
-      setTimeout(async () => {
-        try {
-          console.log('🔌 Tentando conectar ao banco de dados...');
-          if (this.databaseService) {
-            await this.databaseService.connect();
-          }
-          this.logger.info('Database connected successfully');
-          console.log('✅ Banco de dados conectado!');
-
-          console.log('🔄 Executando migrações...');
-          const { spawnSync } = require('child_process');
-          const migrateResult = spawnSync('npx', ['prisma', 'migrate', 'deploy'], {
-            stdio: 'inherit',
-            env: process.env
-          });
-          
-          if (migrateResult.status === 0) {
-            this.logger.info('Database migrations completed');
-            console.log('✅ Migrações concluídas!');
-          } else {
-            console.log('⚠️ Migrações falharam, mas servidor continua rodando');
-          }
-        } catch (error) {
-          console.error('⚠️ Erro ao conectar ao banco:', error);
-          if (this.logger) {
-            this.logger.error('Failed to connect to database', {
-              error: (error as Error).message,
-              stack: (error as Error).stack
+            console.log('🔄 Executando migrações...');
+            const { spawnSync } = require('child_process');
+            const migrateResult = spawnSync('npx', ['prisma', 'migrate', 'deploy'], {
+              stdio: 'inherit',
+              env: process.env
             });
-            this.logger.warn('Server started but database connection failed. Some features may not work.');
+            
+            if (migrateResult.status === 0) {
+              this.logger.info('Database migrations completed');
+              console.log('✅ Migrações concluídas!');
+            } else {
+              console.log('⚠️ Migrações falharam, mas servidor continua rodando');
+            }
+          } catch (error) {
+            console.error('⚠️ Erro ao conectar ao banco:', error);
+            if (this.logger) {
+              this.logger.error('Failed to connect to database', {
+                error: (error as Error).message,
+                stack: (error as Error).stack
+              });
+              this.logger.warn('Server started but database connection failed. Some features may not work.');
+            }
           }
-        }
-      }, 2000);
-    } else {
-      console.log('⚠️ DatabaseService não disponível, servidor rodando sem banco');
-    }
+        }, 1000);
+      } else {
+        console.log('⚠️ DatabaseService não disponível, servidor rodando sem banco');
+      }
+      
+      resolve();
+    });
+      
+    this.httpServer.listen(port, host);
+    });
   }
 
   public async stop(): Promise<void> {

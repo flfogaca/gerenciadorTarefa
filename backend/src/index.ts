@@ -63,6 +63,8 @@ class Application {
       
       this.app.set('trust proxy', true);
       
+      this.configureHealthCheckRoutes();
+      
       this.httpServer = createServer(this.app);
       this.io = new SocketIOServer(this.httpServer, {
         cors: {
@@ -77,7 +79,6 @@ class Application {
       });
       
       this.configureCORS();
-      this.configureHealthCheckRoutes();
       
       try {
         this.container = DIContainer.getContainer();
@@ -473,11 +474,15 @@ process.on('SIGINT', async () => {
 
 // Iniciar aplicação
 console.log('🚀 Iniciando aplicação GestorPro Backend...');
-app.start().catch((error) => {
-  console.error('❌ Failed to start application:', error);
-  console.error('Error details:', error);
-  process.exit(1);
-});
+app.start()
+  .then(() => {
+    console.log('✅ Aplicação iniciada com sucesso e pronta para receber requisições');
+  })
+  .catch((error) => {
+    console.error('❌ Failed to start application:', error);
+    console.error('Error details:', error);
+    process.exit(1);
+  });
 
 process.on('unhandledRejection', (reason, promise) => {
   console.error('Unhandled Rejection at:', promise, 'reason:', reason);

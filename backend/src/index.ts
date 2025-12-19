@@ -184,7 +184,13 @@ class Application {
   private configureCORS(): void {
     this.app.use(cors({
       origin: (origin, callback) => {
-        const allowedOrigins = process.env['ALLOWED_ORIGINS']?.split(',') || [
+        const allowedOriginsRaw = process.env['ALLOWED_ORIGINS'] || '';
+        const allowedOrigins = allowedOriginsRaw
+          .split(',')
+          .map(url => url.trim())
+          .filter(url => url.length > 0);
+        
+        const defaultOrigins = [
           'http://localhost:3000',
           'http://localhost:5173',
           'http://localhost:3001',
@@ -193,10 +199,18 @@ class Application {
           'http://127.0.0.1:3001'
         ];
         
-        if (!origin || allowedOrigins.includes(origin)) {
+        const allOrigins = allowedOrigins.length > 0 ? allowedOrigins : defaultOrigins;
+        
+        if (!origin) {
+          callback(null, true);
+          return;
+        }
+        
+        if (allOrigins.includes(origin)) {
           callback(null, true);
         } else {
           console.log(`⚠️ CORS: Origin não permitida: ${origin}`);
+          console.log(`📋 Origins permitidas: ${allOrigins.join(', ')}`);
           callback(null, true);
         }
       },

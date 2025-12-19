@@ -3,6 +3,12 @@ import { normalizeApiResponse } from '../utils/apiResponse';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api/v1';
 
+if (!import.meta.env.VITE_API_BASE_URL) {
+  console.warn('VITE_API_BASE_URL não está definida. Usando URL padrão:', API_BASE_URL);
+} else {
+  console.log('API Base URL configurada:', API_BASE_URL);
+}
+
 class ApiService {
   private api: AxiosInstance;
   private requestQueue: Map<string, Promise<any>> = new Map();
@@ -10,7 +16,7 @@ class ApiService {
   constructor() {
     this.api = axios.create({
       baseURL: API_BASE_URL,
-      timeout: 10000,
+      timeout: 30000,
       headers: {
         'Content-Type': 'application/json',
       },
@@ -122,6 +128,9 @@ class ApiService {
   // Auth endpoints
   async login(email: string, password: string, tenantId: string = 'default-tenant') {
     try {
+      const url = `${API_BASE_URL}/users/auth/login`;
+      console.log('Tentando fazer login em:', url);
+      
       const response = await this.api.post('/users/auth/login', {
         email,
         password,
@@ -137,6 +146,16 @@ class ApiService {
       }
       return payload;
     } catch (error: any) {
+      console.error('Erro no login:', {
+        message: error.message,
+        code: error.code,
+        response: error.response?.data,
+        status: error.response?.status,
+        url: error.config?.url,
+        baseURL: error.config?.baseURL,
+        fullURL: error.config ? `${error.config.baseURL}${error.config.url}` : 'N/A'
+      });
+
       if (error.response) {
         const message = error.response.data?.message || error.response.data?.error || 'Erro ao fazer login';
         const customError = new Error(message);
@@ -144,8 +163,14 @@ class ApiService {
         (customError as any).status = error.response.status;
         throw customError;
       } else if (error.request) {
-        const customError = new Error('Erro de conexão. Verifique sua internet e tente novamente.');
+        const errorMessage = error.code === 'ECONNABORTED' 
+          ? 'Tempo de conexão esgotado. Verifique se o servidor está acessível.'
+          : error.code === 'ERR_NETWORK'
+          ? `Erro de rede. Verifique se a URL da API está correta: ${API_BASE_URL}`
+          : `Erro de conexão. Não foi possível conectar ao servidor em ${API_BASE_URL}. Verifique se o backend está rodando e acessível.`;
+        const customError = new Error(errorMessage);
         (customError as any).request = error.request;
+        (customError as any).code = error.code;
         throw customError;
       } else {
         const customError = new Error('Erro ao processar a solicitação. Tente novamente.');

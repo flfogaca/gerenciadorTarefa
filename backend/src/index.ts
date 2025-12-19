@@ -131,6 +131,13 @@ class Application {
   }
 
   private configureMiddleware(): void {
+    this.app.use((req, res, next) => {
+      if (req.path === '/health' || req.path === '/api/v1/health') {
+        return next();
+      }
+      next();
+    });
+
     // Segurança
     this.app.use(helmet({
       contentSecurityPolicy: false,

@@ -20,6 +20,8 @@ import { RequirePermission } from '@/core/permissions/permission-system';
 import { RequireTenant } from '@/core/multi-tenant/tenant-context';
 import { ValidationService } from '@/shared/validation/validation.service';
 import { Logger } from '@/shared/logging/logger';
+import { DIContainer } from '@/infrastructure/di/container';
+import { IProjectService } from '@/core/interfaces/services';
 import Joi from 'joi';
 
 @injectable()
@@ -27,10 +29,11 @@ export class ProjectController {
   private readonly createProjectSchema = Joi.object({
     projectId: Joi.string().optional(),
     name: Joi.string().min(2).max(100).required(),
-    description: Joi.string().min(10).max(1000).required(),
+    description: Joi.string().min(3).max(1000).required(),
     clientId: Joi.string().required(),
     managerId: Joi.string().required(),
     tenantId: Joi.string().required(),
+    size: Joi.string().valid('small', 'medium', 'large').allow(null, '').optional(),
     budget: Joi.object({
       planned: Joi.number().positive().required(),
       spent: Joi.number().min(0).default(0),
@@ -43,8 +46,18 @@ export class ProjectController {
       })).default([])
     }).required(),
     timeline: Joi.object({
-      startDate: Joi.date().required(),
-      endDate: Joi.date().greater(Joi.ref('startDate')).required(),
+      startDate: Joi.alternatives().try(Joi.date(), Joi.string().isoDate()).required(),
+      endDate: Joi.alternatives().try(Joi.date(), Joi.string().isoDate()).custom((value, helpers) => {
+        const startDate = helpers.state.ancestors[0]?.startDate;
+        if (startDate) {
+          const start = new Date(startDate);
+          const end = new Date(value);
+          if (end <= start) {
+            return helpers.error('any.custom', { message: 'endDate must be greater than startDate' });
+          }
+        }
+        return value;
+      }).required(),
       milestones: Joi.array().items(Joi.object({
         id: Joi.string().required(),
         name: Joi.string().required(),
@@ -57,7 +70,7 @@ export class ProjectController {
 
   private readonly updateProjectSchema = Joi.object({
     name: Joi.string().min(2).max(100).optional(),
-    description: Joi.string().min(10).max(1000).optional(),
+    description: Joi.string().min(3).max(1000).optional(),
     clientId: Joi.string().optional(),
     managerId: Joi.string().optional(),
     budget: Joi.object({
@@ -103,20 +116,37 @@ export class ProjectController {
   @RequireTenant()
   async createProject(req: Request, res: Response, tenantContext: any): Promise<void> {
     try {
-      const validationResult = await this.validationService.validate(this.createProjectSchema, req.body);
+      const requestData = {
+        ...req.body,
+        tenantId: tenantContext.tenantId.value,
+        timeline: req.body.timeline ? {
+          startDate: typeof req.body.timeline.startDate === 'string' 
+            ? new Date(req.body.timeline.startDate) 
+            : req.body.timeline.startDate,
+          endDate: typeof req.body.timeline.endDate === 'string' 
+            ? new Date(req.body.timeline.endDate) 
+            : req.body.timeline.endDate,
+          milestones: req.body.timeline.milestones || []
+        } : req.body.timeline
+      };
+
+      const validationResult = await this.validationService.validate(this.createProjectSchema, requestData);
       
       if (!validationResult.isValid) {
+        this.logger.warn('Validation failed for project creation', {
+          errors: validationResult.errors,
+          requestData: { ...requestData, budget: '...', timeline: '...' }
+        });
         res.status(400).json({
           error: 'Validation failed',
-          details: validationResult.errors
+          details: (validationResult.errors || []).map((err: any) => ({
+            field: err.path?.join('.') || err.key || 'unknown',
+            message: err.message || 'Invalid value'
+          })),
+          message: 'Dados inválidos. Verifique os campos obrigatórios.'
         });
         return;
       }
-
-      const requestData = {
-        ...req.body,
-        tenantId: tenantContext.tenantId.value
-      };
 
       const result: CreateProjectResponse = await this.createProjectUseCase.execute(requestData);
 
@@ -157,7 +187,9 @@ export class ProjectController {
 
       res.status(500).json({
         error: 'Internal server error',
-        message: 'Failed to create project'
+        message: process.env['NODE_ENV'] === 'development' 
+          ? (error as Error).message 
+          : 'Failed to create project'
       });
     }
   }
@@ -166,9 +198,43 @@ export class ProjectController {
   @RequireTenant()
   async getProject(req: Request, res: Response, tenantContext: any): Promise<void> {
     try {
-      const { projectId } = req.params;
+      const { projectId: paramId } = req.params;
 
-      const result: GetProjectResponse = await this.getProjectUseCase.execute({ projectId: projectId! });
+      if (!paramId) {
+        res.status(400).json({
+          error: 'Bad Request',
+          message: 'Project ID is required'
+        });
+        return;
+      }
+
+      let result: GetProjectResponse | null = null;
+      
+      try {
+        result = await this.getProjectUseCase.execute({ projectId: paramId });
+      } catch (error) {
+        if ((error as Error).message.includes('not found')) {
+          const container = DIContainer.getContainer();
+          const projectService = container.get<IProjectService>(TYPES.ProjectService);
+          const projectById = await projectService.findById(paramId);
+          
+          if (projectById && projectById.tenantId.value === tenantContext.tenantId.value) {
+            result = { project: projectById };
+          }
+        }
+        
+        if (!result) {
+          throw error;
+        }
+      }
+
+      if (!result || !result.project) {
+        res.status(404).json({
+          error: 'Not Found',
+          message: 'Project not found'
+        });
+        return;
+      }
 
       if (result.project.tenantId.value !== tenantContext.tenantId.value) {
         res.status(403).json({
@@ -189,10 +255,11 @@ export class ProjectController {
             clientId: result.project.clientId,
             managerId: result.project.managerId.value,
             status: result.project.status,
+            size: (result.project as any).size || null,
             budget: result.project.budget,
             timeline: result.project.timeline,
             team: result.project.team,
-            settings: result.project.settings,
+            settings: result.project.settings || {},
             progress: result.project.progress,
             isOverdue: result.project.isOverdue,
             totalBudget: result.project.totalBudget,
@@ -207,13 +274,24 @@ export class ProjectController {
     } catch (error) {
       this.logger.error('Failed to get project', {
         error: (error as Error).message,
+        stack: (error as Error).stack,
         projectId: req.params['projectId'],
         requestId: req.headers['x-request-id']
       });
 
+      if ((error as Error).message === 'Project not found' || (error as Error).message.includes('not found')) {
+        res.status(404).json({
+          error: 'Not Found',
+          message: 'Project not found'
+        });
+        return;
+      }
+
       res.status(500).json({
         error: 'Internal server error',
-        message: 'Failed to retrieve project'
+        message: process.env['NODE_ENV'] === 'development' 
+          ? (error as Error).message 
+          : 'Failed to retrieve project'
       });
     }
   }
@@ -222,7 +300,15 @@ export class ProjectController {
   @RequireTenant()
   async updateProject(req: Request, res: Response, tenantContext: any): Promise<void> {
     try {
-      const { projectId } = req.params;
+      const { projectId: paramId } = req.params;
+
+      if (!paramId) {
+        res.status(400).json({
+          error: 'Bad Request',
+          message: 'Project ID is required'
+        });
+        return;
+      }
 
       const validationResult = await this.validationService.validate(this.updateProjectSchema, req.body);
       
@@ -234,10 +320,53 @@ export class ProjectController {
         return;
       }
 
-      const result: UpdateProjectResponse = await this.updateProjectUseCase.execute({
-        projectId,
-        ...req.body
-      });
+      let result: UpdateProjectResponse | null = null;
+      
+      try {
+        result = await this.updateProjectUseCase.execute({
+          projectId: paramId,
+          ...req.body
+        });
+      } catch (error) {
+        if ((error as Error).message.includes('not found') || (error as Error).message.includes('Project with ID')) {
+          const container = DIContainer.getContainer();
+          const projectService = container.get<IProjectService>(TYPES.ProjectService);
+          const existingProject = await projectService.findById(paramId);
+          
+          if (existingProject && existingProject.tenantId.value === tenantContext.tenantId.value) {
+            const updateData: any = {};
+            if (req.body.name !== undefined) updateData.name = req.body.name;
+            if (req.body.description !== undefined) updateData.description = req.body.description;
+            if (req.body.clientId !== undefined) updateData.clientId = req.body.clientId;
+            if (req.body.budget !== undefined) updateData.budget = req.body.budget;
+            if (req.body.timeline !== undefined) {
+              updateData.timeline = {
+                startDate: typeof req.body.timeline.startDate === 'string' 
+                  ? new Date(req.body.timeline.startDate) 
+                  : req.body.timeline.startDate,
+                endDate: typeof req.body.timeline.endDate === 'string' 
+                  ? new Date(req.body.timeline.endDate) 
+                  : req.body.timeline.endDate,
+                milestones: req.body.timeline.milestones || []
+              };
+            }
+            const updatedProject = await projectService.update(paramId, updateData);
+            result = { project: updatedProject };
+          }
+        }
+        
+        if (!result) {
+          throw error;
+        }
+      }
+
+      if (!result || !result.project) {
+        res.status(404).json({
+          error: 'Not Found',
+          message: 'Project not found'
+        });
+        return;
+      }
 
       if (result.project.tenantId.value !== tenantContext.tenantId.value) {
         res.status(403).json({
@@ -270,13 +399,24 @@ export class ProjectController {
     } catch (error) {
       this.logger.error('Failed to update project', {
         error: (error as Error).message,
+        stack: (error as Error).stack,
         projectId: req.params['projectId'],
         requestId: req.headers['x-request-id']
       });
 
+      if ((error as Error).message === 'Project not found' || (error as Error).message.includes('not found')) {
+        res.status(404).json({
+          error: 'Not Found',
+          message: 'Project not found'
+        });
+        return;
+      }
+
       res.status(500).json({
         error: 'Internal server error',
-        message: 'Failed to update project'
+        message: process.env['NODE_ENV'] === 'development' 
+          ? (error as Error).message 
+          : 'Failed to update project'
       });
     }
   }
@@ -297,9 +437,19 @@ export class ProjectController {
         return;
       }
 
+      const statusMap: Record<string, string> = {
+        'PLANNING': 'planning',
+        'ACTIVE': 'active',
+        'ON_HOLD': 'on_hold',
+        'COMPLETED': 'completed',
+        'CANCELLED': 'cancelled'
+      };
+
+      const normalizedStatus = statusMap[req.body.status] || req.body.status.toLowerCase();
+
       const result: ChangeProjectStatusResponse = await this.changeProjectStatusUseCase.execute({
         projectId,
-        ...req.body
+        status: normalizedStatus
       });
 
       if (result.project.tenantId.value !== tenantContext.tenantId.value) {
@@ -450,6 +600,24 @@ export class ProjectController {
     try {
       const { projectId } = req.params;
 
+      if (!projectId) {
+        res.status(400).json({
+          error: 'Bad Request',
+          message: 'Project ID is required'
+        });
+        return;
+      }
+
+      const getResult: GetProjectResponse = await this.getProjectUseCase.execute({ projectId: projectId! });
+      
+      if (getResult.project.tenantId.value !== tenantContext.tenantId.value) {
+        res.status(403).json({
+          error: 'Forbidden',
+          message: 'You can only delete projects from your own tenant'
+        });
+        return;
+      }
+
       const result: DeleteProjectResponse = await this.deleteProjectUseCase.execute({ projectId: projectId! });
 
       this.logger.info('Project deleted successfully', {
@@ -468,11 +636,12 @@ export class ProjectController {
     } catch (error) {
       this.logger.error('Failed to delete project', {
         error: (error as Error).message,
+        stack: (error as Error).stack,
         projectId: req.params['projectId'],
         requestId: req.headers['x-request-id']
       });
 
-      if ((error as Error).message === 'Project not found') {
+      if ((error as Error).message === 'Project not found' || (error as Error).message.includes('not found')) {
         res.status(404).json({
           error: 'Not found',
           message: 'Project not found'
@@ -482,7 +651,9 @@ export class ProjectController {
 
       res.status(500).json({
         error: 'Internal server error',
-        message: 'Failed to delete project'
+        message: process.env['NODE_ENV'] === 'development' 
+          ? (error as Error).message 
+          : 'Failed to delete project'
       });
     }
   }

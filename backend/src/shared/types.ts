@@ -107,4 +107,6 @@ export const TYPES = {
   ReportsController: Symbol.for('ReportsController'),
   MonitoringController: Symbol.for('MonitoringController'),
   NotificationController: Symbol.for('NotificationController'),
+  ImportController: Symbol.for('ImportController'),
+  ImportService: Symbol.for('ImportService'),
 };

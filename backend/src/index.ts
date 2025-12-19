@@ -44,6 +44,7 @@ import { financialReportRoutes } from '@/presentation/routes/financial-report.ro
 import { templateRoutes } from '@/presentation/routes/template.routes';
 import { userSettingsRoutes } from '@/presentation/routes/user-settings.routes';
 import { tenantSettingsRoutes } from '@/presentation/routes/tenant-settings.routes';
+import { importRoutes } from '@/presentation/routes/import.routes';
 
 import { Logger } from '@/shared/logging/logger';
 import { IDatabaseService } from '@/infrastructure/database/database.service';
@@ -72,6 +73,7 @@ class Application {
         }
       });
       
+      this.configureCORS();
       this.configureHealthCheckRoutes();
       
       try {
@@ -114,26 +116,9 @@ class Application {
   private configureMiddleware(): void {
     // Segurança
     this.app.use(helmet({
-      contentSecurityPolicy: {
-        directives: {
-          defaultSrc: ["'self'"],
-          styleSrc: ["'self'", "'unsafe-inline'"],
-          scriptSrc: ["'self'"],
-          imgSrc: ["'self'", "data:", "https:"],
-        },
-      },
-    }));
-
-    // CORS
-    this.app.use(cors({
-      origin: process.env['ALLOWED_ORIGINS']?.split(',') || [
-        'http://localhost:3000',
-        'http://localhost:5173',
-        'http://localhost:3001'
-      ],
-      credentials: true,
-      methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-      allowedHeaders: ['Content-Type', 'Authorization', 'X-Tenant-ID', 'X-Request-ID']
+      contentSecurityPolicy: false,
+      crossOriginEmbedderPolicy: false,
+      crossOriginResourcePolicy: { policy: "cross-origin" }
     }));
 
     // Compressão
@@ -194,6 +179,42 @@ class Application {
 
     // Middleware de auditoria
     this.app.use(AuditMiddleware.create());
+  }
+
+  private configureCORS(): void {
+    this.app.use(cors({
+      origin: (origin, callback) => {
+        const allowedOrigins = process.env['ALLOWED_ORIGINS']?.split(',') || [
+          'http://localhost:3000',
+          'http://localhost:5173',
+          'http://localhost:3001',
+          'http://127.0.0.1:5173',
+          'http://127.0.0.1:3000',
+          'http://127.0.0.1:3001'
+        ];
+        
+        if (!origin || allowedOrigins.includes(origin)) {
+          callback(null, true);
+        } else {
+          console.log(`⚠️ CORS: Origin não permitida: ${origin}`);
+          callback(null, true);
+        }
+      },
+      credentials: true,
+      methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+      allowedHeaders: ['Content-Type', 'Authorization', 'X-Tenant-ID', 'X-Request-ID', 'Accept'],
+      exposedHeaders: ['X-Request-ID'],
+      preflightContinue: false,
+      optionsSuccessStatus: 204
+    }));
+    
+    this.app.options('*', (req, res) => {
+      res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
+      res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
+      res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Tenant-ID, X-Request-ID, Accept');
+      res.header('Access-Control-Allow-Credentials', 'true');
+      res.sendStatus(204);
+    });
   }
 
   private configureHealthCheckRoutes(): void {
@@ -259,6 +280,7 @@ class Application {
     this.app.use('/api/v1/templates', templateRoutes);
     this.app.use('/api/v1/users/me/settings', userSettingsRoutes);
     this.app.use('/api/v1/tenants/settings', tenantSettingsRoutes);
+    this.app.use('/api/v1/import', importRoutes);
 
     // 404 handler
     this.app.use('*', (req, res) => {

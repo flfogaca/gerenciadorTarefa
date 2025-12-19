@@ -4,10 +4,18 @@ import { ReactNode } from 'react';
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 5 * 60 * 1000,
-      cacheTime: 10 * 60 * 1000,
+      staleTime: 10 * 60 * 1000,
+      gcTime: 30 * 60 * 1000,
       refetchOnWindowFocus: false,
-      retry: 1
+      refetchOnMount: false,
+      refetchOnReconnect: false,
+      retry: (failureCount, error: any) => {
+        if (error?.response?.status === 429) {
+          return false;
+        }
+        return failureCount < 1;
+      },
+      retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 5000)
     }
   }
 });

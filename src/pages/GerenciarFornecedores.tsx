@@ -25,7 +25,7 @@ import { showToast, showConfirm } from '../utils/toast';
 import { usePagination } from '../hooks/usePagination';
 import { Supplier } from '../types';
 import { ExportButton } from '../components/ExportButton';
-import { useSuppliers, useDeleteSupplier } from '../hooks/useSuppliers';
+import { useSuppliers, useCreateSupplier, useUpdateSupplier, useDeleteSupplier } from '../hooks/useSuppliers';
 
 
 export default function GerenciarFornecedores() {
@@ -60,6 +60,10 @@ export default function GerenciarFornecedores() {
   });
 
   const [newService, setNewService] = useState('');
+
+  const createSupplierMutation = useCreateSupplier();
+  const updateSupplierMutation = useUpdateSupplier();
+  const deleteSupplierMutation = useDeleteSupplier();
 
   const availableServices = [
     'Desenvolvimento de Software',

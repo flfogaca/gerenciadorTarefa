@@ -90,9 +90,5 @@ export class CreateProjectUseCase implements ICreateProjectUseCase {
       throw new Error('Start date must be before end date');
     }
 
-    const now = new Date();
-    if (timeline.endDate < now) {
-      throw new Error('End date cannot be in the past');
-    }
   }
 }

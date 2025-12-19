@@ -9,9 +9,6 @@ export class TenantIdVO extends ValueObject<string> {
     if (!this.value || this.value.trim().length === 0) {
       throw new Error('TenantId cannot be empty');
     }
-    if (this.value.length < 3 || this.value.length > 50) {
-      throw new Error('TenantId must be between 3 and 50 characters');
-    }
     if (!/^[a-zA-Z0-9_-]+$/.test(this.value)) {
       throw new Error('TenantId can only contain letters, numbers, underscores and hyphens');
     }

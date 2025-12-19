@@ -5,6 +5,7 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001
 
 class ApiService {
   private api: AxiosInstance;
+  private requestQueue: Map<string, Promise<any>> = new Map();
 
   constructor() {
     this.api = axios.create({
@@ -20,7 +21,7 @@ class ApiService {
 
   private setupInterceptors() {
     this.api.interceptors.request.use(
-      (config) => {
+      (config: any) => {
         const token = localStorage.getItem('authToken');
         const tenantId = localStorage.getItem('tenantId');
         
@@ -30,6 +31,14 @@ class ApiService {
         
         if (tenantId) {
           config.headers['X-Tenant-ID'] = tenantId;
+        }
+        
+        if (config._skipLogout) {
+          config._skipLogout = true;
+        }
+        
+        if (config._isCheckAuth) {
+          config._isCheckAuth = true;
         }
         
         return config;
@@ -45,27 +54,65 @@ class ApiService {
       },
       async (error) => {
         const originalRequest = error.config;
+        
+        if (error.response?.status === 429) {
+          if (originalRequest._retry429) {
+            return Promise.reject(error);
+          }
+          
+          originalRequest._retry429 = true;
+          const retryAfter = parseInt(error.response.headers['retry-after'] || '5', 10);
+          const delay = Math.min(retryAfter * 1000, 10000);
+          
+          await new Promise(resolve => setTimeout(resolve, delay));
+          return this.api(originalRequest);
+        }
+        
         if (error.response?.status === 401 && !originalRequest._retry) {
           originalRequest._retry = true;
+          
+          const requestConfig = originalRequest.config || originalRequest;
+          const requestUrl = originalRequest.url || requestConfig?.url || '';
+          const isCheckAuthRequest = 
+            requestUrl?.includes('/users/me') || 
+            (originalRequest as any)?._isCheckAuth ||
+            (requestConfig as any)?._isCheckAuth;
+          
+          if (isCheckAuthRequest) {
+            return Promise.reject(error);
+          }
+          
           const refreshToken = localStorage.getItem('refreshToken');
           const tenantId = localStorage.getItem('tenantId') || 'default-tenant';
           if (refreshToken) {
             try {
               const res = await this.api.post('/users/auth/refresh', {}, {
-                headers: { 'X-Refresh-Token': refreshToken, 'X-Tenant-ID': tenantId }
+                headers: { 'X-Refresh-Token': refreshToken, 'X-Tenant-ID': tenantId },
+                _isCheckAuth: false
               });
               const newToken = res.data?.data?.token;
               if (newToken) {
                 localStorage.setItem('authToken', newToken);
-                originalRequest.headers.Authorization = `Bearer ${newToken}`;
+                if (originalRequest.headers) {
+                  originalRequest.headers.Authorization = `Bearer ${newToken}`;
+                }
                 return this.api(originalRequest);
               }
-            } catch (e) {}
+            } catch (e: any) {
+              const eStatus = e?.response?.status || e?.status;
+              if (eStatus === 401) {
+                localStorage.removeItem('authToken');
+                localStorage.removeItem('refreshToken');
+                localStorage.removeItem('tenantId');
+              }
+              return Promise.reject(e);
+            }
+          } else {
+            localStorage.removeItem('authToken');
+            localStorage.removeItem('refreshToken');
+            localStorage.removeItem('tenantId');
+            return Promise.reject(error);
           }
-          localStorage.removeItem('authToken');
-          localStorage.removeItem('refreshToken');
-          localStorage.removeItem('tenantId');
-          window.location.href = '/login';
         }
         return Promise.reject(error);
       }
@@ -119,7 +166,10 @@ class ApiService {
 
   // User endpoints
   async getCurrentUser() {
-    const response = await this.api.get('/users/me');
+    const config: any = {
+      _isCheckAuth: true
+    };
+    const response = await this.api.get('/users/me', config);
     return response.data?.data;
   }
 
@@ -173,8 +223,29 @@ class ApiService {
 
   // Project endpoints
   async getProjects() {
-    const response = await this.api.get('/projects');
-    return normalizeApiResponse(response);
+    const cacheKey = 'getProjects';
+    const existingRequest = this.requestQueue.get(cacheKey);
+    if (existingRequest) {
+      return existingRequest;
+    }
+    
+    const promise = this.api.get('/projects')
+      .then(response => {
+        this.requestQueue.delete(cacheKey);
+        return normalizeApiResponse(response);
+      })
+      .catch(error => {
+        this.requestQueue.delete(cacheKey);
+        throw error;
+      });
+    
+    this.requestQueue.set(cacheKey, promise);
+    
+    setTimeout(() => {
+      this.requestQueue.delete(cacheKey);
+    }, 5000);
+    
+    return promise;
   }
 
   async getProject(projectId: string) {
@@ -345,6 +416,16 @@ class ApiService {
   }
 
   async healthCheck() {
+    const baseURL = this.api.defaults.baseURL || '';
+    if (baseURL.includes('/api/v1')) {
+      const baseWithoutApi = baseURL.replace('/api/v1', '');
+      return axios.get(`${baseWithoutApi}/api/v1/health`, {
+        withCredentials: true,
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+    }
     return this.api.get('/health');
   }
 
@@ -551,6 +632,39 @@ class ApiService {
 
   getApiInstance(): AxiosInstance {
     return this.api;
+  }
+
+  // Importação
+  async detectImportColumns(file: FormData): Promise<any> {
+    const response = await this.api.post('/import/detect-columns', file, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    });
+    return normalizeApiResponse(response);
+  }
+
+  async importData(type: 'projects' | 'tasks' | 'clients', data: FormData): Promise<any> {
+    const response = await this.api.post(`/import/${type}`, data, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    });
+    return normalizeApiResponse(response);
+  }
+
+  // Documentos
+  async getEntityDocuments(entityType: 'user' | 'client', entityId: string): Promise<any> {
+    const response = await this.api.get(`/${entityType === 'user' ? 'users' : 'clients'}/${entityId}/documents`);
+    return normalizeApiResponse(response);
+  }
+
+  async uploadEntityDocument(data: FormData): Promise<any> {
+    const response = await this.api.post('/files/upload-entity-document', data, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    });
+    return normalizeApiResponse(response);
+  }
+
+  async deleteEntityDocument(entityType: 'user' | 'client', entityId: string, documentId: string): Promise<any> {
+    const response = await this.api.delete(`/${entityType === 'user' ? 'users' : 'clients'}/${entityId}/documents/${documentId}`);
+    return normalizeApiResponse(response);
   }
 }
 

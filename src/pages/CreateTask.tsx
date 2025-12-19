@@ -14,6 +14,7 @@ import {
 import apiService from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import { labelToTaskPriority } from '../utils/statusMapper';
+import { showToast } from '../utils/toast';
 
 export default function CreateTask() {
   const navigate = useNavigate();
@@ -29,6 +30,7 @@ export default function CreateTask() {
     assigneeId: '',
     priority: 'MEDIUM',
     dueDate: '',
+    executionDays: '',
     estimatedHours: 0,
     tags: [] as string[]
   });
@@ -75,6 +77,7 @@ export default function CreateTask() {
         reporterId: user.userId || user.id,
         priority: newTask.priority,
         dueDate: newTask.dueDate ? new Date(newTask.dueDate).toISOString() : undefined,
+        executionDays: newTask.executionDays ? parseInt(newTask.executionDays) : undefined,
         estimatedHours: newTask.estimatedHours || undefined
       };
 
@@ -265,6 +268,21 @@ export default function CreateTask() {
                     placeholder="0"
                   />
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Dias de Execução (calendário)
+                </label>
+                <input
+                  type="number"
+                  value={newTask.executionDays}
+                  onChange={(e) => setNewTask({...newTask, executionDays: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  min="1"
+                  placeholder="Ex: 5"
+                />
+                <p className="text-xs text-gray-500 mt-1">Número de dias úteis para execução</p>
               </div>
             </div>
           </div>

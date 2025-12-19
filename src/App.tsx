@@ -37,23 +37,41 @@ const Notificacoes = lazy(() => import('./pages/Notificacoes'));
 const Templates = lazy(() => import('./pages/Templates'));
 const Analytics = lazy(() => import('./pages/Analytics'));
 const AuditLog = lazy(() => import('./pages/AuditLog'));
+const Importacao = lazy(() => import('./pages/Importacao'));
+const StatusCustomizados = lazy(() => import('./pages/StatusCustomizados'));
+const GerenciarDocumentos = lazy(() => import('./pages/GerenciarDocumentos'));
 
 function ProtectedRoute({ children, permission }: { children: React.ReactNode, permission: string }) {
-  const { user } = useAuth();
+  const { user, isLoading } = useAuth();
   const { can } = usePermission(user);
   
-  if (!user) {
+  if (isLoading) {
+    return <LoadingSpinner />;
+  }
+  
+  const hasToken = localStorage.getItem('authToken');
+  if (!user && !hasToken) {
     return <Navigate to="/login" replace />;
+  }
+  
+  if (!user && hasToken) {
+    return <LoadingSpinner />;
   }
   
   if (can(permission)) return <>{children}</>;
   
-  // Redireciona para dashboard se não tiver permissão
   return <Navigate to="/dashboard" replace />;
 }
 
 function AppRoutes() {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, isLoading } = useAuth();
+
+  if (isLoading) {
+    return <LoadingSpinner />;
+  }
+
+  const hasToken = localStorage.getItem('authToken');
+  const shouldShowAuthRoutes = isAuthenticated || (hasToken && !isLoading);
 
   return (
     <Routes>
@@ -92,7 +110,7 @@ function AppRoutes() {
           <TwoFactorVerify />
         </Suspense>
       } />
-      {isAuthenticated ? (
+      {shouldShowAuthRoutes ? (
         <Route path="/" element={<Layout />}>
           <Route path="dashboard" element={
             <Suspense fallback={<LoadingSpinner />}>

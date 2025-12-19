@@ -223,7 +223,8 @@ export class ProjectService implements IProjectService {
     try {
       this.logger.info('Changing project status', { projectId, status });
 
-      const project = await this.projectRepository.findById(projectId);
+      const projectIdVO = new ProjectIdVO(projectId);
+      const project = await this.projectRepository.findByProjectId(projectIdVO);
       if (!project) {
         throw new Error(`Project with ID ${projectId} not found`);
       }

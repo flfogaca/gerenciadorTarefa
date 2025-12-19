@@ -2,15 +2,44 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import apiService from '../services/api';
 import { showToast } from '../utils/toast';
 
+const mapStatusFromApi = (status: string): string => {
+  const statusMap: Record<string, string> = {
+    'ACTIVE': 'active',
+    'active': 'active',
+    'COMPLETED': 'completed',
+    'completed': 'completed',
+    'ON_HOLD': 'paused',
+    'on_hold': 'paused',
+    'CANCELLED': 'cancelled',
+    'cancelled': 'cancelled',
+    'PLANNING': 'planning',
+    'planning': 'planning'
+  };
+  return statusMap[status] || status.toLowerCase();
+};
+
 export function useProjects() {
   return useQuery({
     queryKey: ['projects'],
     queryFn: async () => {
       const response = await apiService.getProjects();
-      return (response as any)?.data?.projects || (response as any)?.projects || [];
+      const projects = (response as any)?.data?.projects || (response as any)?.projects || [];
+      return projects.map((p: any) => ({
+        ...p,
+        status: mapStatusFromApi(p.status || '')
+      }));
     },
-    staleTime: 5 * 60 * 1000,
-    cacheTime: 10 * 60 * 1000
+    staleTime: 10 * 60 * 1000,
+    gcTime: 30 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
+    retry: (failureCount, error: any) => {
+      if (error?.response?.status === 429) {
+        return false;
+      }
+      return failureCount < 1;
+    },
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 5000)
   });
 }
 

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import apiService from '../services/api';
@@ -52,9 +52,15 @@ export default function DashboardGestor() {
     totalBudget: 0,
     successRate: 0
   });
+  const loadingRef = useRef(false);
 
   useEffect(() => {
-    loadData();
+    if (!loadingRef.current) {
+      loadingRef.current = true;
+      loadData().finally(() => {
+        loadingRef.current = false;
+      });
+    }
   }, []);
 
   const loadData = async () => {
@@ -124,8 +130,10 @@ export default function DashboardGestor() {
           successRate
         });
       }
-    } catch (error) {
-      console.error('Error loading manager dashboard:', error);
+    } catch (error: any) {
+      if (error.response?.status !== 429) {
+        console.error('Error loading manager dashboard:', error);
+      }
     } finally {
       setIsLoading(false);
     }

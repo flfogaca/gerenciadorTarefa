@@ -60,7 +60,24 @@ export default function GerenciarClientes() {
 
   const handleCreateClient = async (e: React.FormEvent) => {
     e.preventDefault();
-    createClientMutation.mutate(formData, {
+    const clientData = {
+      name: formData.name.trim(),
+      cnpj: formData.cnpj.trim() || undefined,
+      email: formData.email.trim() || undefined,
+      phone: formData.phone.trim() || undefined,
+      address: formData.address.street || formData.address.city ? {
+        street: formData.address.street.trim() || undefined,
+        number: formData.address.number.trim() || undefined,
+        complement: formData.address.complement.trim() || undefined,
+        neighborhood: formData.address.neighborhood.trim() || undefined,
+        city: formData.address.city.trim() || undefined,
+        state: formData.address.state.trim() || undefined,
+        zipCode: formData.address.zipCode.trim() || undefined,
+        country: formData.address.country.trim() || 'Brasil'
+      } : undefined
+    };
+    
+    createClientMutation.mutate(clientData, {
       onSuccess: () => {
         setShowCreateModal(false);
         resetForm();
@@ -72,8 +89,25 @@ export default function GerenciarClientes() {
     e.preventDefault();
     if (!editingClient) return;
     
+    const clientData = {
+      name: formData.name.trim(),
+      cnpj: formData.cnpj.trim() || undefined,
+      email: formData.email.trim() || undefined,
+      phone: formData.phone.trim() || undefined,
+      address: formData.address.street || formData.address.city ? {
+        street: formData.address.street.trim() || undefined,
+        number: formData.address.number.trim() || undefined,
+        complement: formData.address.complement.trim() || undefined,
+        neighborhood: formData.address.neighborhood.trim() || undefined,
+        city: formData.address.city.trim() || undefined,
+        state: formData.address.state.trim() || undefined,
+        zipCode: formData.address.zipCode.trim() || undefined,
+        country: formData.address.country.trim() || 'Brasil'
+      } : undefined
+    };
+    
     updateClientMutation.mutate(
-      { clientId: editingClient.id, data: formData },
+      { clientId: editingClient.id, data: clientData },
       {
         onSuccess: () => {
           setShowEditModal(false);

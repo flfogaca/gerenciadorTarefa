@@ -48,6 +48,7 @@ export class PermissionSystem {
       { resource: 'projects', action: 'create' },
       { resource: 'projects', action: 'read' },
       { resource: 'projects', action: 'update' },
+      { resource: 'projects', action: 'delete' },
       { resource: 'projects', action: 'manage_team' },
       { resource: 'tasks', action: 'create' },
       { resource: 'tasks', action: 'read' },

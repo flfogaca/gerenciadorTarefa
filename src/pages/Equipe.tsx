@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import apiService from '../services/api';
+import { showToast } from '../utils/toast';
 import { 
   Plus, 
   Search, 
@@ -133,16 +134,26 @@ export default function Equipe() {
     e.preventDefault();
     try {
       const tenantId = localStorage.getItem('tenantId') || 'default-tenant';
-      await apiService.createUser({
-        email: newMemberData.email,
+      const userData: any = {
+        email: newMemberData.email.trim(),
         password: newMemberData.password,
-        name: `${newMemberData.firstName} ${newMemberData.lastName}`.trim(),
+        firstName: newMemberData.firstName.trim(),
+        lastName: newMemberData.lastName.trim(),
         role: mapRoleToApi(newMemberData.role),
-        phone: newMemberData.phone,
-        position: newMemberData.position,
-        department: newMemberData.department,
         tenantId
-      });
+      };
+      
+      if (newMemberData.phone?.trim()) {
+        userData.phone = newMemberData.phone.trim();
+      }
+      if (newMemberData.position?.trim()) {
+        userData.position = newMemberData.position.trim();
+      }
+      if (newMemberData.department?.trim()) {
+        userData.department = newMemberData.department.trim();
+      }
+      
+      await apiService.createUser(userData);
       setShowCreateModal(false);
       setNewMemberData({
         email: '',
@@ -155,10 +166,22 @@ export default function Equipe() {
         department: ''
       });
       loadTeamMembers();
+      showToast.success('Membro criado com sucesso!');
     } catch (error: any) {
       console.error('Error creating member:', error);
-      const message = error.response?.data?.message || error.message || 'Erro ao criar membro';
-      alert(`Erro ao criar membro: ${message}`);
+      const status = error.response?.status || error.status;
+      let message = error.response?.data?.message || error.message || 'Erro ao criar membro';
+      
+      if (status === 403) {
+        message = 'Você não tem permissão para criar membros. Apenas diretores e gestores podem criar membros.';
+      } else if (status === 400) {
+        const details = error.response?.data?.details || [];
+        if (details.length > 0) {
+          message = `Erro de validação: ${details.map((d: any) => d.message || d).join(', ')}`;
+        }
+      }
+      
+      showToast.error(message);
     }
   };
 

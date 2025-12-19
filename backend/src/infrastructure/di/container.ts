@@ -125,6 +125,7 @@ import { NotificationService } from '@/application/services/notification.service
 import { AuditService } from '@/application/services/audit.service';
 import { CacheService } from '@/application/services/cache.service';
 import { MonitoringService } from '@/application/services/monitoring.service';
+import { ImportService } from '@/application/services/import.service';
 
 // import { CreateUserUseCase } from '@/application/use-cases/user/create-user.use-case';
 // import { CreateProjectUseCase } from '@/application/use-cases/project/create-project.use-case';
@@ -152,6 +153,7 @@ import { TenantSettingsController } from '@/presentation/controllers/tenant-sett
 import { ReportsController } from '@/presentation/controllers/reports.controller';
 import { MonitoringController } from '@/presentation/controllers/monitoring.controller';
 import { NotificationController } from '@/presentation/controllers/notification.controller';
+import { ImportController } from '@/presentation/controllers/import.controller';
 
 // Database
 import { PrismaClient } from '@prisma/client';
@@ -214,6 +216,7 @@ export class DIContainer {
     this.container.bind<IAuditService>(TYPES.AuditService).to(AuditService);
     this.container.bind<CacheService>(TYPES.CacheService).to(CacheService);
     this.container.bind<MonitoringService>(TYPES.MonitoringService).to(MonitoringService);
+    this.container.bind<ImportService>(TYPES.ImportService).to(ImportService);
 
     // Use Cases (apenas os implementados)
     this.container.bind<ICreateTenantUseCase>(TYPES.CreateTenantUseCase).to(CreateTenantUseCase);
@@ -281,6 +284,7 @@ export class DIContainer {
     this.container.bind<ReportsController>(TYPES.ReportsController).to(ReportsController);
     this.container.bind<MonitoringController>(TYPES.MonitoringController).to(MonitoringController);
     this.container.bind<NotificationController>(TYPES.NotificationController).to(NotificationController);
+    this.container.bind<ImportController>(TYPES.ImportController).to(ImportController);
   }
 }
 

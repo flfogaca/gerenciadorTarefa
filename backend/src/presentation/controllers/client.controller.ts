@@ -320,4 +320,90 @@ export class ClientController {
       });
     }
   }
+
+  @RequirePermission('clients', 'read')
+  @RequireTenant()
+  async getClientDocuments(req: Request, res: Response, tenantContext: any): Promise<void> {
+    try {
+      const { clientId } = req.params;
+      const result: GetClientResponse = await this.getClientUseCase.execute({ clientId: clientId! });
+
+      if (result.client.tenantId.value !== tenantContext.tenantId.value) {
+        res.status(403).json({
+          error: 'Forbidden',
+          message: 'You can only access clients from your own tenant'
+        });
+        return;
+      }
+
+      const { PrismaClient } = require('@prisma/client');
+      const prisma = new PrismaClient();
+      try {
+        const client = await prisma.client.findUnique({ where: { id: clientId } });
+        const documents = Array.isArray(client?.documents) ? client.documents : [];
+
+        res.status(200).json({
+          success: true,
+          data: { documents }
+        });
+      } finally {
+        await prisma.$disconnect();
+      }
+    } catch (error) {
+      this.logger.error('Failed to get client documents', {
+        error: (error as Error).message,
+        clientId: req.params['clientId']
+      });
+      res.status(500).json({
+        error: 'Internal server error',
+        message: 'Failed to retrieve documents'
+      });
+    }
+  }
+
+  @RequirePermission('clients', 'update')
+  @RequireTenant()
+  async deleteClientDocument(req: Request, res: Response, tenantContext: any): Promise<void> {
+    try {
+      const { clientId, documentId } = req.params;
+      const result: GetClientResponse = await this.getClientUseCase.execute({ clientId: clientId! });
+
+      if (result.client.tenantId.value !== tenantContext.tenantId.value) {
+        res.status(403).json({
+          error: 'Forbidden',
+          message: 'You can only update clients from your own tenant'
+        });
+        return;
+      }
+
+      const { PrismaClient } = require('@prisma/client');
+      const prisma = new PrismaClient();
+      try {
+        const client = await prisma.client.findUnique({ where: { id: clientId } });
+        const documents = Array.isArray(client?.documents) ? client.documents : [];
+        const updatedDocuments = documents.filter((doc: any) => doc.id !== documentId);
+
+        await prisma.client.update({
+          where: { id: clientId },
+          data: { documents: updatedDocuments }
+        });
+
+        res.status(200).json({
+          success: true,
+          data: { message: 'Document deleted successfully' }
+        });
+      } finally {
+        await prisma.$disconnect();
+      }
+    } catch (error) {
+      this.logger.error('Failed to delete client document', {
+        error: (error as Error).message,
+        clientId: req.params['clientId']
+      });
+      res.status(500).json({
+        error: 'Internal server error',
+        message: 'Failed to delete document'
+      });
+    }
+  }
 }

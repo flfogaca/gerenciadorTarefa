@@ -1,0 +1,43 @@
+COMO ADICIONAR REDIS NO RAILWAY E CONFIGURAR
+============================================
+
+PASSO 1: Criar Redis no Railway
+--------------------------------
+1. Acesse: https://railway.app/dashboard
+2. Selecione o projeto "Gerenciador De Tarefas"
+3. Clique em "New" (botão + no canto superior direito)
+4. Selecione "Database"
+5. Escolha "Redis"
+6. O Railway criará automaticamente o serviço Redis
+
+PASSO 2: Verificar Variáveis Criadas
+-------------------------------------
+Após criar o Redis, o Railway automaticamente cria estas variáveis:
+- REDIS_URL (URL completa de conexão - esta é a principal)
+- REDIS_HOST
+- REDIS_PORT  
+- REDIS_PASSWORD (se necessário)
+
+IMPORTANTE: Essas variáveis estarão disponíveis automaticamente 
+para TODOS os serviços do mesmo projeto, incluindo seu backend.
+
+PASSO 3: Verificar se as Variáveis Estão Disponíveis
+------------------------------------------------------
+Execute no terminal:
+cd backend
+railway variables | grep REDIS
+
+Você deve ver algo como:
+REDIS_URL=redis://default:senha@host:porta
+
+PASSO 4: Confirmar que o Backend Está Usando
+---------------------------------------------
+O código do backend já está configurado para usar REDIS_URL automaticamente.
+Não é necessário fazer nada - ele detectará a variável automaticamente.
+
+NOTAS:
+------
+- O Railway cria as variáveis automaticamente quando você adiciona Redis
+- Não precisa configurar manualmente - já estará disponível
+- O backend usa REDIS_URL diretamente do ambiente
+- Se REDIS_URL não existir, o Redis será opcional (não quebra o sistema)

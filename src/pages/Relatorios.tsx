@@ -14,6 +14,8 @@ import {
   PieChart
 } from 'lucide-react';
 import apiService from '../services/api';
+import { ExportButton } from '../components/ExportButton';
+import { exportService } from '../services/exportService';
 
 interface DashboardReport {
   summary: {
@@ -89,18 +91,158 @@ export default function Relatorios() {
     }
   };
 
-  const exportReport = () => {
+  const exportReportPDF = () => {
     if (!report) return;
     
-    const dataStr = JSON.stringify(report, null, 2);
-    const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
+    const reportData = [
+      {
+        'Métrica': 'Projetos Total',
+        'Valor': report.summary.projects.total
+      },
+      {
+        'Métrica': 'Projetos Ativos',
+        'Valor': report.summary.projects.active
+      },
+      {
+        'Métrica': 'Projetos Concluídos',
+        'Valor': report.summary.projects.completed
+      },
+      {
+        'Métrica': 'Projetos Atrasados',
+        'Valor': report.summary.projects.overdue
+      },
+      {
+        'Métrica': 'Progresso Médio',
+        'Valor': `${report.summary.projects.averageProgress}%`
+      },
+      {
+        'Métrica': 'Tarefas Total',
+        'Valor': report.summary.tasks.total
+      },
+      {
+        'Métrica': 'Tarefas Concluídas',
+        'Valor': report.summary.tasks.completed
+      },
+      {
+        'Métrica': 'Tarefas Em Andamento',
+        'Valor': report.summary.tasks.inProgress
+      },
+      {
+        'Métrica': 'Tarefas Pendentes',
+        'Valor': report.summary.tasks.pending
+      },
+      {
+        'Métrica': 'Tarefas Atrasadas',
+        'Valor': report.summary.tasks.overdue
+      },
+      {
+        'Métrica': 'Clientes Total',
+        'Valor': report.summary.clients.total
+      },
+      {
+        'Métrica': 'Clientes Ativos',
+        'Valor': report.summary.clients.active
+      },
+      {
+        'Métrica': 'Fornecedores Total',
+        'Valor': report.summary.suppliers.total
+      },
+      {
+        'Métrica': 'Fornecedores Ativos',
+        'Valor': report.summary.suppliers.active
+      },
+      {
+        'Métrica': 'Horas Estimadas',
+        'Valor': `${report.summary.timeTracking.estimatedHours}h`
+      },
+      {
+        'Métrica': 'Horas Realizadas',
+        'Valor': `${report.summary.timeTracking.completedHours}h`
+      },
+      {
+        'Métrica': 'Eficiência',
+        'Valor': `${report.summary.timeTracking.efficiency}%`
+      }
+    ];
     
-    const exportFileDefaultName = `relatorio-dashboard-${new Date().toISOString().split('T')[0]}.json`;
+    exportService.exportToPDF('Relatório Dashboard', reportData, ['Métrica', 'Valor'], { 'Métrica': 'Métrica', 'Valor': 'Valor' });
+  };
+
+  const exportReportExcel = () => {
+    if (!report) return;
     
-    const linkElement = document.createElement('a');
-    linkElement.setAttribute('href', dataUri);
-    linkElement.setAttribute('download', exportFileDefaultName);
-    linkElement.click();
+    const reportData = [
+      {
+        'Métrica': 'Projetos Total',
+        'Valor': report.summary.projects.total
+      },
+      {
+        'Métrica': 'Projetos Ativos',
+        'Valor': report.summary.projects.active
+      },
+      {
+        'Métrica': 'Projetos Concluídos',
+        'Valor': report.summary.projects.completed
+      },
+      {
+        'Métrica': 'Projetos Atrasados',
+        'Valor': report.summary.projects.overdue
+      },
+      {
+        'Métrica': 'Progresso Médio',
+        'Valor': `${report.summary.projects.averageProgress}%`
+      },
+      {
+        'Métrica': 'Tarefas Total',
+        'Valor': report.summary.tasks.total
+      },
+      {
+        'Métrica': 'Tarefas Concluídas',
+        'Valor': report.summary.tasks.completed
+      },
+      {
+        'Métrica': 'Tarefas Em Andamento',
+        'Valor': report.summary.tasks.inProgress
+      },
+      {
+        'Métrica': 'Tarefas Pendentes',
+        'Valor': report.summary.tasks.pending
+      },
+      {
+        'Métrica': 'Tarefas Atrasadas',
+        'Valor': report.summary.tasks.overdue
+      },
+      {
+        'Métrica': 'Clientes Total',
+        'Valor': report.summary.clients.total
+      },
+      {
+        'Métrica': 'Clientes Ativos',
+        'Valor': report.summary.clients.active
+      },
+      {
+        'Métrica': 'Fornecedores Total',
+        'Valor': report.summary.suppliers.total
+      },
+      {
+        'Métrica': 'Fornecedores Ativos',
+        'Valor': report.summary.suppliers.active
+      },
+      {
+        'Métrica': 'Horas Estimadas',
+        'Valor': `${report.summary.timeTracking.estimatedHours}h`
+      },
+      {
+        'Métrica': 'Horas Realizadas',
+        'Valor': `${report.summary.timeTracking.completedHours}h`
+      },
+      {
+        'Métrica': 'Eficiência',
+        'Valor': `${report.summary.timeTracking.efficiency}%`
+      }
+    ];
+    
+    exportService.exportToExcel('Relatório Dashboard', reportData, ['Métrica', 'Valor'], { 'Métrica': 'Métrica', 'Valor': 'Valor' });
   };
 
   if (isLoading) {
@@ -142,13 +284,13 @@ export default function Relatorios() {
               <option value="90">Últimos 90 dias</option>
               <option value="365">Último ano</option>
             </select>
-            <button
-              onClick={exportReport}
-              className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 flex items-center gap-2"
-            >
-              <Download size={20} />
-              Exportar
-            </button>
+            <ExportButton
+              title="Relatório Dashboard"
+              data={[]}
+              columns={[]}
+              onExportPDF={exportReportPDF}
+              onExportExcel={exportReportExcel}
+            />
           </div>
         </div>
       </div>

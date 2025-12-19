@@ -11,5 +11,7 @@ export const clientRoutes = Router();
 clientRoutes.post('/', clientController.createClient.bind(clientController));
 clientRoutes.get('/', clientController.listClients.bind(clientController));
 clientRoutes.get('/:clientId', clientController.getClient.bind(clientController));
+clientRoutes.get('/:clientId/documents', clientController.getClientDocuments.bind(clientController));
+clientRoutes.delete('/:clientId/documents/:documentId', clientController.deleteClientDocument.bind(clientController));
 clientRoutes.put('/:clientId', clientController.updateClient.bind(clientController));
 clientRoutes.delete('/:clientId', clientController.deleteClient.bind(clientController));

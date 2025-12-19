@@ -60,6 +60,7 @@ export default function Cronograma() {
     responsible: '',
     startDate: '',
     endDate: '',
+    executionDays: '',
     status: 'Pendente',
     progress: 0,
     attachments: 0
@@ -374,9 +375,17 @@ export default function Cronograma() {
                 for (let i = 0; i < 42; i++) {
                   const dateStr = currentDate.toISOString().split('T')[0];
                   const dayActivities = filteredActivities.filter(a => {
-                    const start = new Date(a.startDate).toISOString().split('T')[0];
-                    const end = new Date(a.endDate).toISOString().split('T')[0];
-                    return dateStr >= start && dateStr <= end;
+                    if (!a.startDate || !a.endDate) return false;
+                    try {
+                      const start = new Date(a.startDate);
+                      const end = new Date(a.endDate);
+                      if (isNaN(start.getTime()) || isNaN(end.getTime())) return false;
+                      const startStr = start.toISOString().split('T')[0];
+                      const endStr = end.toISOString().split('T')[0];
+                      return dateStr >= startStr && dateStr <= endStr;
+                    } catch {
+                      return false;
+                    }
                   });
                   
                   const isCurrentMonth = currentDate.getMonth() === today.getMonth();
@@ -635,6 +644,19 @@ export default function Cronograma() {
                       onChange={(e) => setNewActivity({...newActivity, endDate: e.target.value})}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Dias de Execução</label>
+                    <input
+                      type="number"
+                      value={newActivity.executionDays}
+                      onChange={(e) => setNewActivity({...newActivity, executionDays: e.target.value})}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      min="1"
+                      placeholder="Ex: 5"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">Número de dias úteis para execução</p>
                   </div>
                 </div>
 

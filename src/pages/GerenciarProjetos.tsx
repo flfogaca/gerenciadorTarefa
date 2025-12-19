@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { 
   Plus, 
   Search, 
@@ -21,6 +22,7 @@ import { ExportButton } from '../components/ExportButton';
 
 export default function GerenciarProjetos() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
 
@@ -54,8 +56,25 @@ export default function GerenciarProjetos() {
     initialPage: 1
   });
 
+  const mapStatusFromApi = (status: string): string => {
+    const statusMap: Record<string, string> = {
+      'ACTIVE': 'active',
+      'active': 'active',
+      'COMPLETED': 'completed',
+      'completed': 'completed',
+      'ON_HOLD': 'paused',
+      'on_hold': 'paused',
+      'CANCELLED': 'cancelled',
+      'cancelled': 'cancelled',
+      'PLANNING': 'planning',
+      'planning': 'planning'
+    };
+    return statusMap[status] || status.toLowerCase();
+  };
+
   const getStatusColor = (status: string) => {
-    switch (status) {
+    const normalizedStatus = mapStatusFromApi(status);
+    switch (normalizedStatus) {
       case 'active':
         return 'bg-green-100 text-green-800';
       case 'completed':
@@ -68,7 +87,6 @@ export default function GerenciarProjetos() {
         return 'bg-gray-100 text-gray-800';
     }
   };
-
 
   const mapStatusToApi = (status: string): string => {
     const statusMap: Record<string, string> = {
@@ -87,15 +105,89 @@ export default function GerenciarProjetos() {
   };
 
   const handleStatusChange = async (projectId: string, newStatus: string) => {
+    const apiStatus = mapStatusToApi(newStatus);
+    const normalizedStatus = mapStatusFromApi(apiStatus);
+    const previousStatus = projects.find((p: any) => ((p as any).projectId || p.id) === projectId)?.status;
+    
+    queryClient.setQueryData(['projects'], (oldData: any) => {
+      if (!oldData) return oldData;
+      return oldData.map((p: any) => {
+        const pId = (p as any).projectId || p.id;
+        if (pId === projectId) {
+          return {
+            ...p,
+            status: normalizedStatus
+          };
+        }
+        return p;
+      });
+    });
+    
     try {
-      const apiStatus = mapStatusToApi(newStatus);
       await apiService.changeProjectStatus(projectId, apiStatus);
+      
+      queryClient.setQueryData(['projects'], (oldData: any) => {
+        if (!oldData) return oldData;
+        return oldData.map((p: any) => {
+          const pId = (p as any).projectId || p.id;
+          if (pId === projectId) {
+            return {
+              ...p,
+              status: normalizedStatus
+            };
+          }
+          return p;
+        });
+      });
+      
+      queryClient.invalidateQueries({ 
+        queryKey: ['projects'], 
+        exact: false,
+        refetchType: 'all'
+      });
+      
+      queryClient.invalidateQueries({ 
+        queryKey: ['project', projectId], 
+        exact: false,
+        refetchType: 'all'
+      });
+      
+      const freshData = await refetch({ cancelRefetch: true });
+      
+      if (freshData?.data) {
+        const mappedData = (freshData.data as any[]).map((p: any) => ({
+          ...p,
+          status: mapStatusFromApi(p.status || '')
+        }));
+        queryClient.setQueryData(['projects'], mappedData);
+      }
+      
       showToast.success('Status do projeto atualizado com sucesso!');
-      refetch();
     } catch (error: any) {
+      queryClient.setQueryData(['projects'], (oldData: any) => {
+        if (!oldData) return oldData;
+        return oldData.map((p: any) => {
+          const pId = (p as any).projectId || p.id;
+          if (pId === projectId) {
+            return {
+              ...p,
+              status: previousStatus
+            };
+          }
+          return p;
+        });
+      });
+      
       console.error('Error changing project status:', error);
-      const message = error.response?.data?.message || error.message || 'Erro ao alterar status do projeto';
-      showToast.error(message);
+      const errorDetails = error.response?.data?.details || [];
+      const errorMessage = error.response?.data?.message || error.message || 'Erro ao alterar status do projeto';
+      
+      if (errorDetails.length > 0) {
+        const detailsMessage = errorDetails.map((d: any) => `${d.field || 'campo'}: ${d.message || d}`).join(', ');
+        showToast.error(`Erro de validação: ${detailsMessage}`);
+      } else {
+        showToast.error(`Erro: ${errorMessage}`);
+      }
     }
   };
 
@@ -247,8 +339,8 @@ export default function GerenciarProjetos() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <select
-                        value={project.status}
-                        onChange={(e) => handleStatusChange(project.id, e.target.value)}
+                        value={mapStatusFromApi(project.status)}
+                        onChange={(e) => handleStatusChange((project as any).projectId || project.id, e.target.value)}
                         className={`px-2 py-1 text-xs font-medium rounded-full border-0 ${getStatusColor(project.status)} cursor-pointer`}
                         onClick={(e) => e.stopPropagation()}
                       >

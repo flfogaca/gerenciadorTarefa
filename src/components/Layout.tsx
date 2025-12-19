@@ -24,7 +24,9 @@ import {
   FolderKanban,
   FolderPlus,
   UserCog,
-  PlusSquare
+  Upload,
+  PlusSquare,
+  Tag
 } from 'lucide-react';
 
 export default function Layout() {
@@ -144,9 +146,9 @@ export default function Layout() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="flex">
-        <div className={`fixed inset-y-0 left-0 z-50 w-64 bg-white shadow-lg transform transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:inset-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-          <div className="flex items-center justify-between h-16 px-6 border-b border-gray-200">
+      <div className="flex h-screen">
+        <div className={`fixed inset-y-0 left-0 z-50 w-64 bg-white shadow-lg transform transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:inset-0 h-full flex flex-col ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+          <div className="flex items-center justify-between h-16 px-6 border-b border-gray-200 flex-shrink-0">
             <div className="flex items-center">
               <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-lg flex items-center justify-center">
                 <span className="text-white font-bold text-lg">G</span>
@@ -161,7 +163,7 @@ export default function Layout() {
             </button>
           </div>
           
-          <nav className="mt-6 px-3 flex-1 overflow-y-auto">
+          <nav className="flex-1 overflow-y-auto px-3 py-6">
             <div className="space-y-1">
               {navigation.map((item) => (
                 <Link
@@ -176,7 +178,7 @@ export default function Layout() {
             </div>
           </nav>
 
-          <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-gray-200">
+          <div className="p-4 border-t border-gray-200 flex-shrink-0">
             <button onClick={logout} className="sidebar-item w-full button-press">
               <LogOut className="mr-3 text-gray-400" size={20} />
               Sair

@@ -851,4 +851,68 @@ export class UserController {
       });
     }
   }
+
+  @RequirePermission('users', 'read')
+  async getUserDocuments(req: Request, res: Response): Promise<void> {
+    try {
+      const { userId } = req.params;
+      const result: GetUserResponse = await this.getUserUseCase.execute({ userId: userId! });
+      
+      const profile = result.user.profile as any;
+      const documents = Array.isArray(profile?.documents) 
+        ? profile.documents 
+        : [];
+
+      res.status(200).json({
+        success: true,
+        data: { documents }
+      });
+    } catch (error) {
+      this.logger.error('Failed to get user documents', {
+        error: (error as Error).message,
+        userId: req.params['userId']
+      });
+      res.status(500).json({
+        error: 'Internal server error',
+        message: 'Failed to retrieve documents'
+      });
+    }
+  }
+
+  @RequirePermission('users', 'update')
+  async deleteUserDocument(req: Request, res: Response): Promise<void> {
+    try {
+      const { userId, documentId } = req.params;
+      const result: GetUserResponse = await this.getUserUseCase.execute({ userId: userId! });
+      
+      const profile = result.user.profile as any;
+      const documents = Array.isArray(profile?.documents) 
+        ? profile.documents 
+        : [];
+      
+      const updatedDocuments = documents.filter((doc: any) => doc.id !== documentId);
+      
+      await this.updateUserUseCase.execute({
+        userId: userId!,
+        profile: {
+          ...result.user.profile,
+          documents: updatedDocuments
+        } as any
+      });
+
+      res.status(200).json({
+        success: true,
+        data: { message: 'Document deleted successfully' }
+      });
+    } catch (error) {
+      this.logger.error('Failed to delete user document', {
+        error: (error as Error).message,
+        userId: req.params['userId']
+      });
+      res.status(500).json({
+        error: 'Internal server error',
+        message: 'Failed to delete document'
+      });
+    }
+  }
 }

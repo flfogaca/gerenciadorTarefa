@@ -24,6 +24,8 @@ userRoutes.get('/me/2fa/status', userController.get2FAStatus.bind(userController
 userRoutes.post('/', userController.createUser.bind(userController));
 userRoutes.get('/', userController.listUsers.bind(userController));
 userRoutes.get('/:userId', userController.getUser.bind(userController));
+userRoutes.get('/:userId/documents', userController.getUserDocuments.bind(userController));
+userRoutes.delete('/:userId/documents/:documentId', userController.deleteUserDocument.bind(userController));
 userRoutes.put('/:userId', userController.updateUser.bind(userController));
 userRoutes.put('/:userId/password', validateRequest(authSchemas.changePassword), userController.changePassword.bind(userController));
 userRoutes.delete('/:userId', userController.deleteUser.bind(userController));

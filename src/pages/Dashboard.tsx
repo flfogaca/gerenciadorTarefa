@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import apiService from '../services/api';
@@ -53,6 +53,7 @@ export default function Dashboard() {
   const [dashboardReport, setDashboardReport] = useState<any>(null);
   const { user } = useAuth();
   const navigate = useNavigate();
+  const loadingRef = useRef(false);
 
   const mapRoleToDisplay = (role: string): string => {
     const roleMap: Record<string, string> = {
@@ -66,13 +67,20 @@ export default function Dashboard() {
   };
 
   useEffect(() => {
+    if (loadingRef.current) return;
+    
     const loadData = async () => {
       try {
+        loadingRef.current = true;
         setIsLoading(true);
         
-        // Verificar conexão com backend
-        await apiService.healthCheck();
-        setBackendStatus('connected');
+        try {
+          await apiService.healthCheck();
+          setBackendStatus('connected');
+        } catch (healthError) {
+          console.warn('Health check falhou, mas continuando:', healthError);
+          setBackendStatus('disconnected');
+        }
 
         const [projectsResponse, tasksResponse, usersResponse, reportResponse] = await Promise.all([
           apiService.getProjects(),
@@ -86,11 +94,14 @@ export default function Dashboard() {
         setUsers((usersResponse as any).users || []);
         setDashboardReport(reportResponse);
 
-      } catch (error) {
-        console.error('Error loading dashboard data:', error);
+      } catch (error: any) {
+        if (error.response?.status !== 429) {
+          console.error('Error loading dashboard data:', error);
+        }
         setBackendStatus('disconnected');
       } finally {
         setIsLoading(false);
+        loadingRef.current = false;
       }
     };
 

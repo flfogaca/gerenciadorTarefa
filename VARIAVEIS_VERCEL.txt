@@ -1,0 +1,33 @@
+VARIÁVEIS DE AMBIENTE PARA VERCEL (FRONTEND)
+============================================
+
+IMPORTANTE: Adicione estas variáveis no Vercel em:
+Settings > Environment Variables
+
+URL DO BACKEND (RAILWAY):
+--------------------------
+VITE_API_BASE_URL=https://gerenciadortarefa-production.up.railway.app/api/v1
+
+WEBSOCKET (OPCIONAL - será derivado do VITE_API_BASE_URL se não fornecido):
+---------------------------------------------------------------------------
+VITE_WS_URL=wss://gerenciadortarefa-production.up.railway.app
+
+NOTAS:
+------
+1. O VITE_API_BASE_URL deve apontar para a URL do seu backend no Railway
+2. Certifique-se de usar HTTPS (https://) para produção
+3. O WebSocket será automaticamente derivado do VITE_API_BASE_URL se VITE_WS_URL não for fornecido
+4. Após adicionar as variáveis, faça um novo deploy no Vercel
+
+INSTRUÇÕES PARA ADICIONAR NO VERCEL:
+-------------------------------------
+1. Acesse: https://vercel.com/dashboard
+2. Selecione seu projeto
+3. Vá em Settings > Environment Variables
+4. Adicione cada variável:
+   - Key: VITE_API_BASE_URL
+   - Value: https://gerenciadortarefa-production.up.railway.app/api/v1
+   - Environment: Production, Preview, Development (ou apenas Production)
+5. (Opcional) Adicione VITE_WS_URL se quiser especificar explicitamente
+6. Salve e faça um novo deploy
+

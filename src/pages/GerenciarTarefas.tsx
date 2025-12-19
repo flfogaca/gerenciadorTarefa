@@ -278,7 +278,7 @@ export default function GerenciarTarefas() {
         }
       }
       
-      await loadData();
+      refetch();
     }
     
     setColumns(columns.filter(col => col !== columnName));
@@ -424,7 +424,12 @@ export default function GerenciarTarefas() {
                 <div className="flex items-start space-x-4 flex-1">
                   <div className="flex-shrink-0">
                     <div className="h-12 w-12 rounded-full bg-blue-500 flex items-center justify-center">
-                      <span className="text-sm font-medium text-white">{task.assignee.avatar}</span>
+                      <span className="text-sm font-medium text-white">
+                        {(() => {
+                          const assignee = users.find(u => (u.id || u.userId) === (task.assigneeId || task.assignee?.id || task.assignee?.userId));
+                          return assignee ? `${assignee.firstName?.[0] || ''}${assignee.lastName?.[0] || ''}`.toUpperCase() : 'N/A';
+                        })()}
+                      </span>
                     </div>
                   </div>
                   
@@ -830,9 +835,19 @@ export default function GerenciarTarefas() {
                     <label className="block text-sm font-medium text-gray-700 mb-1">Responsável</label>
                     <div className="flex items-center space-x-2">
                       <div className="w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center">
-                        <span className="text-xs text-white font-medium">{selectedTaskForView.assignee.avatar}</span>
+                        <span className="text-xs text-white font-medium">
+                          {(() => {
+                            const assignee = users.find(u => (u.id || u.userId) === (selectedTaskForView.assigneeId || selectedTaskForView.assignee?.id || selectedTaskForView.assignee?.userId));
+                            return assignee ? `${assignee.firstName?.[0] || ''}${assignee.lastName?.[0] || ''}`.toUpperCase() : 'N/A';
+                          })()}
+                        </span>
                       </div>
-                      <span className="text-gray-900">{selectedTaskForView.assignee.name}</span>
+                      <span className="text-gray-900">
+                        {(() => {
+                          const assignee = users.find(u => (u.id || u.userId) === (selectedTaskForView.assigneeId || selectedTaskForView.assignee?.id || selectedTaskForView.assignee?.userId));
+                          return assignee ? `${assignee.firstName} ${assignee.lastName}` : 'N/A';
+                        })()}
+                      </span>
                     </div>
                   </div>
                   <div>

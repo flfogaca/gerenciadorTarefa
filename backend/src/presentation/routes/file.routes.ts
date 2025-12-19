@@ -30,6 +30,7 @@ const controller = new FileController();
 export const fileRoutes = Router();
 
 fileRoutes.post('/upload', upload.array('files', 10), controller.upload.bind(controller));
+fileRoutes.post('/upload-entity-document', upload.single('file'), controller.uploadEntityDocument.bind(controller));
 fileRoutes.get('/raw/:filename', controller.serve.bind(controller));
 fileRoutes.get('/thumbnails/:filename', controller.serveThumbnail.bind(controller));
 

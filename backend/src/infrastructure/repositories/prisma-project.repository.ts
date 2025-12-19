@@ -241,6 +241,46 @@ export class PrismaProjectRepository implements IProjectRepository {
   }
 
   async update(entity: Project): Promise<Project> {
+    const normalizedTimeline = entity.timeline ? {
+      ...entity.timeline,
+      milestones: (entity.timeline.milestones || []).map((m: any) => {
+        let dueDate: Date;
+        if (m.dueDate instanceof Date && !isNaN(m.dueDate.getTime())) {
+          dueDate = m.dueDate;
+        } else if (m.dueDate) {
+          dueDate = new Date(m.dueDate);
+          if (isNaN(dueDate.getTime())) {
+            dueDate = new Date();
+          }
+        } else if (m.date) {
+          dueDate = new Date(m.date);
+          if (isNaN(dueDate.getTime())) {
+            dueDate = new Date();
+          }
+        } else {
+          dueDate = new Date();
+        }
+
+        let completedAt: Date | undefined;
+        if (m.completedAt) {
+          if (m.completedAt instanceof Date && !isNaN(m.completedAt.getTime())) {
+            completedAt = m.completedAt;
+          } else {
+            completedAt = new Date(m.completedAt);
+            if (isNaN(completedAt.getTime())) {
+              completedAt = undefined;
+            }
+          }
+        }
+
+        return {
+          ...m,
+          dueDate,
+          completedAt
+        };
+      })
+    } : entity.timeline;
+
     const project = await this.prisma.project.update({
       where: { id: entity.id },
       data: {
@@ -250,7 +290,7 @@ export class PrismaProjectRepository implements IProjectRepository {
         managerId: entity.managerId.value,
         status: entity.status as any,
         budget: entity.budget as any,
-        timeline: entity.timeline as any,
+        timeline: normalizedTimeline as any,
         team: entity.team as any,
         settings: entity.settings as any,
         isActive: entity.isActive,
@@ -299,11 +339,34 @@ export class PrismaProjectRepository implements IProjectRepository {
       endDate: project.timeline.endDate instanceof Date 
         ? project.timeline.endDate 
         : new Date(project.timeline.endDate),
-      milestones: (project.timeline.milestones || []).map((m: any) => ({
-        ...m,
-        dueDate: m.dueDate instanceof Date ? m.dueDate : new Date(m.dueDate),
-        completedAt: m.completedAt ? (m.completedAt instanceof Date ? m.completedAt : new Date(m.completedAt)) : undefined
-      }))
+      milestones: (project.timeline.milestones || []).map((m: any) => {
+        let dueDate: Date;
+        if (m.dueDate) {
+          dueDate = m.dueDate instanceof Date ? m.dueDate : new Date(m.dueDate);
+        } else if (m.date) {
+          dueDate = new Date(m.date);
+        } else {
+          dueDate = new Date();
+        }
+        
+        if (isNaN(dueDate.getTime())) {
+          dueDate = new Date();
+        }
+
+        let completedAt: Date | undefined;
+        if (m.completedAt) {
+          completedAt = m.completedAt instanceof Date ? m.completedAt : new Date(m.completedAt);
+          if (isNaN(completedAt.getTime())) {
+            completedAt = undefined;
+          }
+        }
+
+        return {
+          ...m,
+          dueDate,
+          completedAt
+        };
+      })
     } : { startDate: new Date(), endDate: new Date(), milestones: [] };
 
     return new Project(

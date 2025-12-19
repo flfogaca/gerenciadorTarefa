@@ -412,9 +412,7 @@ class Application {
       console.log(`📊 API disponível em: http://${host}:${port}/api/v1`);
       console.log(`🔗 Health da API: http://${host}:${port}/api/v1/health`);
       
-      setTimeout(() => {
-        resolve();
-      }, 100);
+      resolve();
       
       if (this.databaseService) {
         setImmediate(async () => {

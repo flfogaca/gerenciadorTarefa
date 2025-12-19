@@ -131,7 +131,8 @@ class Application {
     this.app.use((req, res, next) => {
       if (req.path === '/health' || req.path === '/api/v1/health') {
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        return res.end('{"status":"ok"}');
+        res.end('{"status":"ok"}');
+        return;
       }
       next();
     });

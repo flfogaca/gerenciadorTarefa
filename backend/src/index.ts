@@ -384,10 +384,12 @@ class Application {
       console.log(`📊 API disponível em: http://${host}:${port}/api/v1`);
       console.log(`🔗 Health da API: http://${host}:${port}/api/v1/health`);
       
-      resolve();
+      setImmediate(() => {
+        resolve();
+      });
       
       if (this.databaseService) {
-        setImmediate(async () => {
+        setTimeout(async () => {
           try {
             console.log('🔌 Tentando conectar ao banco de dados...');
             if (this.databaseService) {
@@ -419,7 +421,7 @@ class Application {
               this.logger.warn('Server started but database connection failed. Some features may not work.');
             }
           }
-        });
+        }, 500);
       } else {
         console.log('⚠️ DatabaseService não disponível, servidor rodando sem banco');
       }

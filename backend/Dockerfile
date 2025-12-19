@@ -38,9 +38,6 @@ ENV NODE_ENV=production
 
 EXPOSE 3001
 
-HEALTHCHECK --interval=10s --timeout=3s --start-period=15s --retries=3 \
-    CMD curl -f http://localhost:${PORT:-8080}/health || exit 1
-
 ENTRYPOINT ["dumb-init", "--"]
 
 CMD ["node", "dist/index.js"]
